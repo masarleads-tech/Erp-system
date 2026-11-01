@@ -90,7 +90,10 @@ tfoot td{font-weight:800;background:var(--soft)}
 .hint{color:var(--muted);font-size:14px}
 .chip{display:inline-block;padding:4px 10px;border-radius:20px;background:var(--soft);color:var(--brand2);margin:3px;cursor:pointer;font-size:14px;font-weight:700;border:0;font-family:inherit}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:10px;display:none;z-index:9}
-.hidden{display:none}
+.hidden{display:none!important}
+.pw{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:20;padding:16px}
+.pwbox{background:var(--card);border-radius:14px;padding:20px;width:100%;max-width:400px}
+.pwbox p{line-height:1.7}
 .req{color:var(--bad)}
 #report-out .rh{text-align:center;margin-bottom:10px}
 #report-out .rh h2{margin:0;font-size:24px;color:var(--brand2)}
@@ -243,7 +246,7 @@ tfoot td{font-weight:800;background:var(--soft)}
   </div>
   <div class="card" style="border:2px solid var(--bad)">
     <h2 style="color:var(--bad)">⚠ منطقة الخطر</h2>
-    <p class="hint">الحذف ما برجع. كل زر رح يسألك قبل ما يحذف.</p>
+    <p class="hint">الحذف ما برجع. كل حذف بالبرنامج بيطلب كلمة السر.</p>
     <div class="row" style="align-items:end">
       <div><label>احذف يوم</label><input type="date" id="z-day"></div>
       <div><button class="btn" style="background:var(--bad);width:100%" onclick="zapDay()">احذف بيانات هاليوم</button></div>
@@ -257,6 +260,16 @@ tfoot td{font-weight:800;background:var(--soft)}
 </section>
 </main>
 <div class="toast" id="toast"></div>
+<div id="pw" class="pw hidden" role="dialog" aria-modal="true" aria-labelledby="pw-msg">
+  <div class="pwbox">
+    <h2 style="color:var(--bad)">🔒 تأكيد الحذف</h2>
+    <p id="pw-msg"></p>
+    <label for="pw-in">اكتب كلمة السر</label>
+    <input type="password" id="pw-in" inputmode="numeric" autocomplete="off">
+    <p id="pw-err" class="req hidden">كلمة السر غلط</p>
+    <div class="nav2"><button class="btn ghost" id="pw-no">إلغاء</button><button class="btn" style="background:var(--bad)" id="pw-ok">احذف</button></div>
+  </div>
+</div>
 
 <script>
 // ---------- storage ----------
@@ -310,7 +323,7 @@ function dayTotals(d){
 }
 function lineHTML(kind,name,amt){
   const ph=kind==='sal'?'اسم الموظف':'البيان';
-  return `<div class="line"><input class="nm" placeholder="${ph}" value="${esc(name)}"><input class="amt" type="number" step="0.001" min="0" placeholder="0.000" value="${amt||''}"><button class="btn del" title="احذف" onclick="this.parentNode.remove();calc()">✕</button></div>`;
+  return `<div class="line"><input class="nm" placeholder="${ph}" value="${esc(name)}"><input class="amt" type="number" step="0.001" min="0" placeholder="0.000" value="${amt||''}"><button class="btn del" title="احذف" onclick="delLine(this)">✕</button></div>`;
 }
 function addLine(kind,name='',amt=''){
   const box=$(kind==='sal'?'sal-list':'exp-list');
@@ -408,7 +421,7 @@ function savePayment(){
   persist();$('p-amt').value='';$('p-desc').value='';$('p-reason').value='';
   $('p-month').value=date.slice(0,7);renderPayments();toast('انحفظت الدفعة');$('p-amt').focus();
 }
-function delPayment(id){if(!confirm('أكيد بدك تحذف هاي الدفعة؟'))return;DB.payments=DB.payments.filter(p=>p.id!==id);persist();renderPayments()}
+async function delPayment(id){if(!await askPass('أكيد بدك تحذف هاي الدفعة؟'))return;DB.payments=DB.payments.filter(p=>p.id!==id);persist();renderPayments()}
 function payPayment(id,from){
   const p=DB.payments.find(x=>x.id===id),d=$('p-paydate').value||today();
   if(!confirm('تسجيل دفع '+f(p.amount)+' دينار ('+p.cat+') '+SRC[from]+' بتاريخ '+nice(d)+'؟'))return;
@@ -539,28 +552,43 @@ $('rp-date').onchange=showReport;$('rp-month').onchange=showReport;
 
 // ---------- backup ----------
 function backup(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(DB,null,1)],{type:'application/json'}));a.download='بسيطة-نسخة-احتياطية-'+today()+'.json';a.click()}
-$('restore').onchange=e=>{const fl=e.target.files[0];if(!fl)return;const rd=new FileReader();rd.onload=()=>{try{const d=JSON.parse(rd.result);if(!d.days||!d.payments)throw 0;
+$('restore').onchange=e=>{const fl=e.target.files[0];if(!fl)return;const rd=new FileReader();rd.onload=async()=>{try{const d=JSON.parse(rd.result);if(!d.days||!d.payments)throw 0;
   if(d.import){ // merge: imported days replace the same dates, payments are added once
-    const ds=Object.keys(d.days);if(!confirm('رح نضيف '+ds.length+' يوم و '+d.payments.length+' دفعة لبياناتك. الأيام اللي إلها نفس التاريخ رح تتبدّل. نكمّل؟'))return;
+    const ds=Object.keys(d.days);if(!await askPass('رح نضيف '+ds.length+' يوم و '+d.payments.length+' دفعة لبياناتك. الأيام اللي إلها نفس التاريخ رح تتبدّل. نكمّل؟'))return;
     ds.forEach(k=>DB.days[k]=d.days[k]);const ids=new Set(DB.payments.map(p=>p.id));d.payments.forEach(p=>{if(!ids.has(p.id))DB.payments.push(p)});
     (d.employees||[]).forEach(n=>{if(!DB.employees.includes(n))DB.employees.push(n)});
   } else {
-    if(!confirm('هاد رح يستبدل كل البيانات الحالية بالنسخة الاحتياطية. متأكد؟'))return;DB=d;DB.employees=DB.employees||[];
+    if(!await askPass('هاد رح يستبدل كل البيانات الحالية بالنسخة الاحتياطية. متأكد؟'))return;DB=d;DB.employees=DB.employees||[];
   }
   persist();loadDay();renderPayments();toast('تمّت إضافة البيانات')}catch(x){alert('الملف مش صحيح')}finally{e.target.value=''}};rd.readAsText(fl)};
 
+// ---------- password for every delete ----------
+const DEL_PASS='2002';
+function askPass(msg){return new Promise(res=>{
+  const box=$('pw'),inp=$('pw-in');$('pw-msg').textContent=msg;inp.value='';$('pw-err').classList.add('hidden');box.classList.remove('hidden');setTimeout(()=>inp.focus(),30);
+  const done=v=>{box.classList.add('hidden');$('pw-ok').onclick=$('pw-no').onclick=inp.onkeydown=null;res(v)};
+  const ok=()=>{if(inp.value===DEL_PASS)done(true);else{$('pw-err').classList.remove('hidden');inp.value='';inp.focus()}};
+  $('pw-ok').onclick=ok;$('pw-no').onclick=()=>done(false);
+  inp.onkeydown=e=>{if(e.key==='Enter')ok();if(e.key==='Escape')done(false)};
+})}
+async function delLine(btn){
+  const l=btn.parentNode,has=l.querySelector('.nm').value.trim()||num(l.querySelector('.amt').value);
+  if(has&&!await askPass('بدك تحذف هاد السطر؟'))return;
+  l.remove();calc();
+}
+
 // ---------- danger zone ----------
-function zapDay(){const d=$('z-day').value;if(!d)return alert('اختار اليوم');
+async function zapDay(){const d=$('z-day').value;if(!d)return alert('اختار اليوم');
   if(!DB.days[d])return alert('ما في بيانات يومية بهاد التاريخ');
-  if(!confirm('أكيد بدك تحذف المبيعات والرواتب والمصاريف تبعت يوم '+nice(d)+'؟ (الدفعات ما رح تنحذف)'))return;
+  if(!await askPass('أكيد بدك تحذف المبيعات والرواتب والمصاريف تبعت يوم '+nice(d)+'؟ (الدفعات ما رح تنحذف)'))return;
   delete DB.days[d];persist();loadDay();toast('انحذف اليوم')}
-function zapMonth(){const m=$('z-month').value;if(!m)return alert('اختار الشهر');
+async function zapMonth(){const m=$('z-month').value;if(!m)return alert('اختار الشهر');
   const ds=Object.keys(DB.days).filter(k=>k.startsWith(m)),ps=DB.payments.filter(p=>p.date.startsWith(m));
   if(!ds.length&&!ps.length)return alert('ما في بيانات بهاد الشهر');
   const [y,mm]=m.split('-').map(Number);
-  if(!confirm('أكيد بدك تحذف كل بيانات '+MON[mm-1]+' '+y+'؟ ('+ds.length+' يوم و '+ps.length+' دفعة)'))return;
+  if(!await askPass('أكيد بدك تحذف كل بيانات '+MON[mm-1]+' '+y+'؟ ('+ds.length+' يوم و '+ps.length+' دفعة)'))return;
   ds.forEach(k=>delete DB.days[k]);DB.payments=DB.payments.filter(p=>!p.date.startsWith(m));persist();loadDay();renderPayments();toast('انحذف الشهر')}
-function zapAll(){if(!confirm('أكيد بدك تحذف كل البيانات وتبدأ من جديد؟ رح ننزّل نسخة احتياطية أول.'))return;
+async function zapAll(){if(!await askPass('أكيد بدك تحذف كل البيانات وتبدأ من جديد؟ رح ننزّل نسخة احتياطية أول.'))return;
   backup();DB={days:{},payments:[],employees:[]};persist();loadDay();renderPayments();toast('انحذف كل شي. النسخة الاحتياطية انحفظت')}
 
 // ---------- init ----------
