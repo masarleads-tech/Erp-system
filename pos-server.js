@@ -1,0 +1,54 @@
+// POS server: the ERP computer serves the POS page on the local WiFi.
+// Sales are stored on this computer in Documents\Basita\pos-sales.json (safe write + daily backup).
+// The menu and the cashier users (name + PIN) come from the ERP data file (DB.pos), written by the ERP window.
+const http=require('http'),fs=require('fs'),path=require('path'),os=require('os');
+module.exports=function(app,ipcMain,getWin){
+  const dir=path.join(app.getPath('documents'),'Basita'),bdir=path.join(dir,'backups');
+  const dataFile=path.join(dir,'basita-data.json'),salesFile=path.join(dir,'pos-sales.json');
+  fs.mkdirSync(bdir,{recursive:true});
+  const readJSON=f=>{try{return JSON.parse(fs.readFileSync(f,'utf8'))}catch(e){return null}};
+  function writeSafe(f,txt){const tmp=f+'.tmp',fd=fs.openSync(tmp,'w');try{fs.writeSync(fd,txt);fs.fsyncSync(fd)}finally{fs.closeSync(fd)}fs.renameSync(tmp,f)}
+  const pad=n=>String(n).padStart(2,'0');
+  const today=()=>{const n=new Date();return n.getFullYear()+'-'+pad(n.getMonth()+1)+'-'+pad(n.getDate())};
+  let S=readJSON(salesFile);
+  if(!S||!Array.isArray(S.sales)){ // fall back to newest backup
+    S=null;try{for(const b of fs.readdirSync(bdir).filter(n=>n.startsWith('pos-')).sort().reverse()){S=readJSON(path.join(bdir,b));if(S&&Array.isArray(S.sales))break;S=null}}catch(e){}
+    if(!S)S={sales:[],next:1};
+  }
+  function saveSales(){const t=JSON.stringify(S);writeSafe(salesFile,t);writeSafe(path.join(bdir,'pos-sales-'+today()+'.json'),t);const w=getWin();if(w&&!w.isDestroyed())w.webContents.send('pos-changed')}
+  const cfg=()=>{const d=readJSON(dataFile)||{};return d.pos||{menu:[],users:[]}};
+  const who=(c,pin)=>(c.users||[]).find(x=>x.pin&&String(pin)===String(x.pin)&&x.active!==false);
+  const page=fs.readFileSync(path.join(__dirname,'pos.html'));
+  const send=(res,code,obj)=>{res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(obj))};
+  const server=http.createServer((req,res)=>{
+    const u=new URL(req.url,'http://x');
+    if(req.method==='GET'&&(u.pathname==='/'||u.pathname==='/pos')){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});return res.end(page)}
+    const c=cfg();
+    if(u.pathname==='/api/menu'){ // also used as cashier login
+      const w=who(c,u.searchParams.get('pin'));if(!w)return send(res,403,{error:'pin'});
+      return send(res,200,{menu:c.menu||[],cashier:w.name});
+    }
+    if(u.pathname==='/api/sale'&&req.method==='POST'){
+      let body='';req.on('data',d=>{body+=d;if(body.length>200000)req.destroy()});
+      req.on('end',()=>{
+        let s;try{s=JSON.parse(body)}catch(e){return send(res,400,{error:'json'})}
+        const w=who(c,s.pin);if(!w)return send(res,403,{error:'pin'});
+        if(!s.id||!Array.isArray(s.items)||!s.items.length||!['cash','card'].includes(s.method))return send(res,400,{error:'bad'});
+        const dup=S.sales.find(x=>x.id===s.id);if(dup)return send(res,200,{ok:true,no:dup.no});
+        const items=s.items.map(i=>({name:String(i.name).slice(0,80),price:Math.max(0,+i.price||0),qty:Math.max(1,Math.round(+i.qty||1))}));
+        const total=Math.round(items.reduce((a,i)=>a+i.price*i.qty,0)*1000)/1000;
+        const n=new Date(),sale={id:String(s.id).slice(0,60),no:S.next++,date:today(),time:pad(n.getHours())+':'+pad(n.getMinutes()),items,total,method:s.method,cashier:w.name,voided:false};
+        S.sales.push(sale);try{saveSales()}catch(e){S.sales.pop();S.next--;return send(res,500,{error:'save'})}
+        send(res,200,{ok:true,no:sale.no});
+      });return;
+    }
+    send(res,404,{error:'not found'});
+  });
+  let port=8080;
+  server.on('error',e=>{if(e.code==='EADDRINUSE'&&port<8090){port++;server.listen(port,'0.0.0.0')}});
+  server.listen(port,'0.0.0.0');
+  const urls=()=>{const r=[];for(const l of Object.values(os.networkInterfaces()))for(const a of l||[])if(a.family==='IPv4'&&!a.internal)r.push('http://'+a.address+':'+port);return r};
+  ipcMain.on('pos-info',e=>{e.returnValue={urls:urls(),port}});
+  ipcMain.on('pos-sales',e=>{e.returnValue=S.sales});
+  ipcMain.on('pos-void',(e,id,v)=>{const s=S.sales.find(x=>x.id===id);if(s){s.voided=!!v;try{saveSales();e.returnValue=true}catch(err){e.returnValue=false}}else e.returnValue=false});
+};

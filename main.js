@@ -2,6 +2,7 @@ const {app,BrowserWindow,ipcMain,dialog,Menu,shell}=require('electron');
 const path=require('path'),fs=require('fs');
 let win;
 require('./data.js')(app,ipcMain);
+app.whenReady().then(()=>require('./pos-server.js')(app,ipcMain,()=>win));
 if(!app.requestSingleInstanceLock()){app.quit()}
 app.on('second-instance',()=>{if(win){if(win.isMinimized())win.restore();win.focus()}});
 function create(){
@@ -9,7 +10,7 @@ function create(){
     webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false}});
   Menu.setApplicationMenu(null);
   win.loadFile(path.join(__dirname,'index.html'));
-  // block any network navigation; app is fully offline
+  // block any network navigation; the ERP window itself stays offline
   win.webContents.setWindowOpenHandler(()=>({action:'deny'}));
   win.webContents.on('will-navigate',e=>e.preventDefault());
   win.webContents.session.on('will-download',(e,item)=>{

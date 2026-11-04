@@ -16,6 +16,8 @@ jobs:
           node-version: 22
       - run: npm install
       - run: npm run dist
+      - run: copy dist\Basita-Setup.exe dist\Basita-Setup-1.0.0.exe
+        shell: cmd
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_type == 'tag' && github.ref_name || 'latest' }}

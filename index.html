@@ -47,6 +47,7 @@ header small{opacity:.85;font-size:14px}
 nav{display:flex;gap:6px;flex-wrap:wrap}
 nav button{background:rgba(255,255,255,.15);color:#fff;border:0;border-radius:10px;padding:9px 14px;font:inherit;font-weight:700;cursor:pointer}
 nav button.on{background:#fff;color:var(--brand2)}
+#lock{background:var(--bg);z-index:30}
 main{max-width:980px;margin:0 auto;padding:16px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px}
 h2{margin:0 0 12px;font-size:20px}
@@ -62,6 +63,9 @@ input[type=number]{direction:ltr;text-align:right}
 .btn.ghost{background:transparent;color:var(--brand2);border:1px solid var(--brand)}
 .btn.small{padding:6px 10px;font-size:14px}
 .btn.del{background:transparent;color:var(--bad);border:1px solid var(--badsoft);padding:6px 10px}
+.dgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
+.dgrid .card{margin-bottom:0}
+@media (max-width:760px){.dgrid{grid-template-columns:1fr}}
 .steps{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
 .steps span{flex:1 1 100px;text-align:center;padding:8px;border-radius:10px;background:var(--bg);color:var(--muted);font-weight:700;font-size:14px}
 .steps span.on{background:var(--brand);color:#fff}
@@ -91,7 +95,7 @@ tfoot td{font-weight:800;background:var(--soft)}
 .chip{display:inline-block;padding:4px 10px;border-radius:20px;background:var(--soft);color:var(--brand2);margin:3px;cursor:pointer;font-size:14px;font-weight:700;border:0;font-family:inherit}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:10px;display:none;z-index:9}
 .hidden{display:none!important}
-.pw{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:20;padding:16px}
+.pw{position:fixed;inset:0;background:rgba(0,0,0,.45);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:20;padding:16px}
 .pwbox{background:var(--card);border-radius:14px;padding:20px;width:100%;max-width:400px}
 .pwbox p{line-height:1.7}
 .req{color:var(--bad)}
@@ -115,7 +119,9 @@ tfoot td{font-weight:800;background:var(--soft)}
     <button data-tab="daily" class="on">اليومية</button>
     <button data-tab="pay">الدفعات</button>
     <button data-tab="rep">التقارير</button>
+    <button data-tab="pos">الكاشير</button>
     <button data-tab="set">نسخة احتياطية واستيراد</button>
+    <button id="lockbtn" title="قفل">🔒 قفل</button>
   </nav>
 </header>
 
@@ -128,56 +134,46 @@ tfoot td{font-weight:800;background:var(--soft)}
       <div class="hint" id="d-status" style="padding-bottom:10px"></div>
     </div>
   </div>
-  <div class="card">
-    <div class="steps">
-      <span data-s="1">١. الدخل</span><span data-s="2">٢. الرواتب</span><span data-s="3">٣. المصاريف</span><span data-s="4">٤. صافي الربح</span>
-    </div>
-
-    <div id="s1">
-      <h2>قديش دخل اليوم؟</h2>
+  <div class="dgrid">
+    <div class="card dcard">
+      <h2>💵 الدخل</h2>
       <div class="row">
         <div><label>كاش</label><input type="number" step="0.001" min="0" id="i-cash" placeholder="0.000"></div>
         <div><label>فيزا / بطاقات</label><input type="number" step="0.001" min="0" id="i-card" placeholder="0.000"></div>
         <div><label>تطبيقات توصيل</label><input type="number" step="0.001" min="0" id="i-app" placeholder="0.000"></div>
       </div>
+      <div id="i-pos" class="total hidden" style="background:var(--goodsoft)"><span>مبيعات الكاشير (POS)</span><span id="i-pos-v"></span></div>
       <div class="total"><span>مجموع الدخل</span><span id="i-total">0.000</span></div>
     </div>
 
-    <div id="s2" class="hidden">
-      <h2>رواتب اليوم</h2>
-      <p class="hint">اكتب اسم الموظف والمبلغ. الأسماء اللي استخدمتها قبل بتطلع هون، اضغط عليها لتضيفها بسرعة.</p>
+    <div class="card dcard">
+      <h2>👥 الرواتب</h2>
+      <p class="hint">اكبس على اسم موظف عشان تضيفه بسرعة.</p>
       <div id="emp-chips"></div>
       <div id="sal-list"></div>
       <button class="btn ghost small" onclick="addLine('sal')">+ زيد موظف</button>
       <div class="total"><span>مجموع الرواتب</span><span id="sal-total">0.000</span></div>
     </div>
 
-    <div id="s3" class="hidden">
-      <h2>مصاريف اليوم</h2>
+    <div class="card dcard">
+      <h2>🧾 المصاريف</h2>
       <p class="hint">مثلاً: غاز، خبز، كهربا، تنظيف…</p>
       <div id="exp-list"></div>
       <button class="btn ghost small" onclick="addLine('exp')">+ زيد مصروف</button>
       <div class="total"><span>مجموع المصاريف</span><span id="exp-total">0.000</span></div>
     </div>
 
-    <div id="s4" class="hidden">
-      <h2>ملخص اليوم</h2>
-      <div class="sum">
-        <div><small>الدخل</small><b id="r-inc"></b></div>
-        <div><small>الرواتب</small><b id="r-sal"></b></div>
-        <div><small>المصاريف</small><b id="r-exp"></b></div>
-      </div>
-      <div class="net" id="r-netbox"><div>صافي ربح اليوم</div><div class="big" id="r-net"></div><div class="hint">الدخل − الرواتب − المصاريف</div></div>
+    <div class="card dcard">
+      <h2>📊 صافي اليوم</h2>
+      <div class="net" id="r-netbox" style="margin-top:0"><div>صافي ربح اليوم</div><div class="big" id="r-net"></div><div class="hint">الدخل − الرواتب − المصاريف</div></div>
       <div class="sum" style="margin-top:12px">
         <div><small>دفعات انْدفعت من دخل اليوم</small><b id="r-pay"></b></div>
         <div><small>الصافي بعد دفعات اليومية</small><b id="r-net2"></b></div>
       </div>
-      <p class="hint" id="r-saved"></p>
-    </div>
-
-    <div class="nav2">
-      <button class="btn ghost" id="b-back">رجوع</button>
-      <button class="btn" id="b-next">التالي</button>
+      <div class="nav2">
+        <button class="btn ghost" id="b-prev">→ اليوم اللي قبل</button>
+        <button class="btn ghost" id="b-nextday">اليوم اللي بعد ←</button>
+      </div>
     </div>
   </div>
 </section>
@@ -234,8 +230,53 @@ tfoot td{font-weight:800;background:var(--soft)}
   <div class="card" id="report-out"></div>
 </section>
 
+<!-- ============ POS ============ -->
+<section id="tab-pos" class="hidden">
+  <div class="card">
+    <h2>🖥️ الكاشير على الواي فاي</h2>
+    <div id="pos-addr"></div>
+  </div>
+  <div class="dgrid">
+    <div class="card">
+      <h2>👤 الكاشيرية</h2>
+      <p class="hint">كل كاشير بدخل على شاشة الكاشير بالرقم السري تبعه. المدير بس بضيف وبعدّل.</p>
+      <div class="row" style="align-items:end">
+        <div><label for="u-name">الاسم</label><input id="u-name" placeholder="مثلاً: أحمد"></div>
+        <div><label for="u-pin">رقم سري (4 أرقام أو أكثر)</label><input id="u-pin" inputmode="numeric" maxlength="8"></div>
+        <div style="flex:0 0 auto"><button class="btn" onclick="addUser()">+ زيد</button></div>
+      </div>
+      <div class="tablewrap" style="margin-top:10px"><table id="u-table"></table></div>
+    </div>
+    <div class="card">
+      <h2>🍽️ الأصناف والأسعار</h2>
+      <div class="row" style="align-items:end">
+        <div><label for="m-cat">القسم</label><input id="m-cat" placeholder="مثلاً: سندويشات" list="m-cats"><datalist id="m-cats"></datalist></div>
+        <div><label for="m-name">الصنف</label><input id="m-name" placeholder="مثلاً: شاورما"></div>
+        <div><label for="m-price">السعر (دينار)</label><input id="m-price" type="number" step="0.001" min="0"></div>
+        <div style="flex:0 0 auto"><button class="btn" onclick="addItem()">+ زيد</button></div>
+      </div>
+      <p class="hint">لتغيير السعر: عدّل الرقم بالجدول وبنحفظ لحاله.</p>
+      <div class="tablewrap"><table id="m-table"></table></div>
+    </div>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <div class="row" style="align-items:end"><div><h2 style="margin:0">🧾 فواتير الكاشير</h2></div><div><label for="s-date">اليوم</label><input type="date" id="s-date"></div></div>
+    <div class="tablewrap" style="margin-top:10px"><table id="s-table"></table></div>
+  </div>
+</section>
+
 <!-- ============ BACKUP ============ -->
 <section id="tab-set" class="hidden">
+  <div class="card">
+    <h2>🔑 كلمة سر المدير</h2>
+    <p class="hint">هاي كلمة السر اللي بتفتح البرنامج وبتسمح بالحذف. أول مرة هي 2002، غيّرها لإشي بتعرفه انت بس.</p>
+    <div class="row" style="align-items:end">
+      <div><label for="ap-old">كلمة السر الحالية</label><input type="password" id="ap-old"></div>
+      <div><label for="ap-new">الجديدة</label><input type="password" id="ap-new"></div>
+      <div><label for="ap-new2">أكّد الجديدة</label><input type="password" id="ap-new2"></div>
+      <div style="flex:0 0 auto"><button class="btn" onclick="changeAdmin()">غيّر</button></div>
+    </div>
+  </div>
   <div class="card">
     <h2>نسخة احتياطية</h2>
     <p class="hint">البيانات محفوظة على هاد الجهاز وهاد المتصفح بس. نزّل نسخة احتياطية كل أسبوع عشان ما تضيع، وبتقدر ترجعها على أي جهاز ثاني.</p>
@@ -260,6 +301,16 @@ tfoot td{font-weight:800;background:var(--soft)}
 </section>
 </main>
 <div class="toast" id="toast"></div>
+<div id="lock" class="pw">
+  <div class="pwbox" style="text-align:center">
+    <div style="font-size:44px;font-weight:800;color:var(--brand)">بسيطة</div>
+    <h2>دخول المدير</h2>
+    <label for="lock-in">كلمة سر المدير</label>
+    <input type="password" id="lock-in" autocomplete="off" style="text-align:center;font-size:22px">
+    <p id="lock-err" class="req hidden">كلمة السر غلط</p>
+    <button class="btn" style="width:100%;margin-top:12px" id="lock-ok">ادخل</button>
+  </div>
+</div>
 <div id="pw" class="pw hidden" role="dialog" aria-modal="true" aria-labelledby="pw-msg">
   <div class="pwbox">
     <h2 style="color:var(--bad)">🔒 تأكيد الحذف</h2>
@@ -305,18 +356,18 @@ const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&g
 function toast(m){const t=$('toast');t.textContent=m;t.style.display='block';clearTimeout(t._t);t._t=setTimeout(()=>t.style.display='none',2200)}
 
 // ---------- tabs ----------
-document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
-  document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));
-  ['daily','pay','rep','set'].forEach(t=>$('tab-'+t).classList.toggle('hidden',t!==b.dataset.tab));
+document.querySelectorAll('nav button[data-tab]').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('nav button[data-tab]').forEach(x=>x.classList.toggle('on',x===b));
+  ['daily','pay','rep','pos','set'].forEach(t=>$('tab-'+t).classList.toggle('hidden',t!==b.dataset.tab));
   if(b.dataset.tab==='pay')renderPayments();
   if(b.dataset.tab==='rep')showReport();
+  if(b.dataset.tab==='pos')renderPos();
 });
 
 // ---------- daily wizard ----------
-let step=1;
 function dayObj(date){return DB.days[date]||{income:{cash:0,card:0,app:0},salaries:[],expenses:[]}}
-function dayTotals(d){
-  const inc=num(d.income.cash)+num(d.income.card)+num(d.income.app);
+function dayTotals(d,k){
+  const inc=num(d.income.cash)+num(d.income.card)+num(d.income.app)+(k?posDay(k).total:0);
   const sal=d.salaries.reduce((a,x)=>a+num(x.amount),0);
   const exp=d.expenses.reduce((a,x)=>a+num(x.amount),0);
   return {inc,sal,exp,net:inc-sal-exp};
@@ -339,15 +390,17 @@ function collect(){
 }
 let loadingDay=false,autoT=null,curDay='';
 function calc(){
-  const d=collect(),t=dayTotals(d);
+  const d=collect(),t=dayTotals(d,curDay);
+  const pd=posDay(curDay);$('i-pos').classList.toggle('hidden',!pd.count);$('i-pos-v').textContent=JD(pd.total)+' ('+pd.count+' فاتورة · كاش '+f(pd.cash)+' · فيزا '+f(pd.card)+')';
   $('i-total').textContent=JD(t.inc);$('sal-total').textContent=JD(t.sal);$('exp-total').textContent=JD(t.exp);
+  showSummary();
   if(!loadingDay){clearTimeout(autoT);autoT=setTimeout(autoSave,500)}
 }
 // save while typing, so nothing is lost if the computer shuts down
 function autoSave(){
   autoT=null;const date=curDay,d=collect(),t=dayTotals(d);
   if(!date||(!DB.days[date]&&t.inc+t.sal+t.exp===0&&!d.salaries.length&&!d.expenses.length))return;
-  DB.days[date]=d;persist();$('d-status').textContent='✓ انحفظ تلقائياً';
+  DB.days[date]=d;d.salaries.forEach(x=>{if(x.name&&!DB.employees.includes(x.name)&&document.activeElement?.value!==x.name)DB.employees.push(x.name)});persist();$('d-status').textContent='✓ انحفظ تلقائياً';
 }
 window.addEventListener('beforeunload',()=>{if(autoT){clearTimeout(autoT);autoSave()}});
 function loadDay(){
@@ -359,7 +412,7 @@ function loadDay(){
   if(!d.salaries.length)addLine('sal');
   if(!d.expenses.length)addLine('exp');
   $('d-status').textContent=DB.days[date]?'✓ هاد اليوم محفوظ، بتقدر تعدّل عليه':'يوم جديد';
-  loadingDay=true;renderChips();calc();loadingDay=false;goStep(1);
+  loadingDay=true;renderChips();calc();loadingDay=false;
 }
 function renderChips(){
   $('emp-chips').innerHTML=DB.employees.map(n=>`<button class="chip" data-n="${esc(n)}">+ ${esc(n)}</button>`).join('');
@@ -374,30 +427,14 @@ function saveDay(){
   d.salaries.forEach(s=>{if(s.name&&!DB.employees.includes(s.name))DB.employees.push(s.name)});
   persist();
 }
-function goStep(n){
-  step=n;
-  for(let i=1;i<=4;i++){$('s'+i).classList.toggle('hidden',i!==n)}
-  document.querySelectorAll('.steps span').forEach(s=>{const k=+s.dataset.s;s.className=k===n?'on':(k<n?'done':'')});
-  $('b-back').style.visibility=n===1?'hidden':'visible';
-  $('b-next').textContent=n===3?'احفظ واحسب الصافي':(n===4?'يوم جديد':'التالي');
-  if(n===4)showSummary();
-}
 function showSummary(){
-  const date=$('d-date').value,t=dayTotals(dayObj(date));
-  const pay=paidOn(date,'daily');
-  $('r-inc').textContent=JD(t.inc);$('r-sal').textContent=JD(t.sal);$('r-exp').textContent=JD(t.exp);
+  const date=curDay,t=dayTotals(collect(),curDay),pay=paidOn(date,'daily');
   $('r-net').textContent=JD(t.net);$('r-net').className='big '+(t.net>=0?'pos':'neg');
   $('r-netbox').className='net '+(t.net>=0?'p':'n');
   $('r-pay').textContent=JD(pay);$('r-net2').textContent=JD(t.net-pay);
-  $('r-saved').textContent='✓ انحفظ يوم '+nice(date);
 }
-$('b-next').onclick=()=>{
-  if(step===1&&dayTotals(collect()).inc===0&&!confirm('ما دخّلت أي دخل لليوم. بدك تكمّل؟'))return;
-  if(step<3){goStep(step+1)}
-  else if(step===3){saveDay();goStep(4);toast('انحفظ اليوم')}
-  else{const d=parse($('d-date').value);d.setDate(d.getDate()+1);$('d-date').value=iso(d);loadDay()}
-};
-$('b-back').onclick=()=>{if(step===4){goStep(3)}else goStep(step-1)};
+function shiftDay(n){if(autoT){clearTimeout(autoT);autoSave()}const d=parse($('d-date').value);d.setDate(d.getDate()+n);$('d-date').value=iso(d);loadDay()}
+$('b-prev').onclick=()=>shiftDay(-1);$('b-nextday').onclick=()=>shiftDay(1);
 $('d-date').onchange=()=>{if(autoT){clearTimeout(autoT);autoSave()}loadDay()};
 ['i-cash','i-card','i-app'].forEach(i=>$(i).oninput=calc);
 
@@ -454,11 +491,11 @@ const paidOn=(k,from)=>DB.payments.filter(p=>p.paidFrom===from&&p.paidDate===k).
 function buildReport(){
   const R=range(),rows=[];
   for(let d=new Date(R.s);d<=R.e;d.setDate(d.getDate()+1)){
-    const k=iso(d),day=DB.days[k],t=day?dayTotals(day):{inc:0,sal:0,exp:0,net:0};
+    const k=iso(d),day=DB.days[k],t=dayTotals(day||dayObj(k),k),pdk=posDay(k);
     const pays=DB.payments.filter(p=>p.date===k);
     const byCat={};CATS.forEach(c=>byCat[c]=pays.filter(p=>p.cat===c).reduce((a,p)=>a+num(p.amount),0));
     const pay=pays.reduce((a,p)=>a+num(p.amount),0),payDaily=paidOn(k,'daily'),payOther=paidOn(k,'other');
-    rows.push({date:k,label:nice(k),has:!!day||pays.length>0||payDaily>0||payOther>0,...t,byCat,pay,payDaily,payOther,final:t.net-payDaily});
+    rows.push({date:k,label:nice(k),has:!!day||pdk.count>0||pays.length>0||payDaily>0||payOther>0,...t,byCat,pay,payDaily,payOther,final:t.net-payDaily});
   }
   const T={inc:0,sal:0,exp:0,net:0,pay:0,payDaily:0,payOther:0,final:0,byCat:{}};CATS.forEach(c=>T.byCat[c]=0);
   rows.forEach(r=>{['inc','sal','exp','net','pay','payDaily','payOther','final'].forEach(k=>T[k]+=r[k]);CATS.forEach(c=>T.byCat[c]+=r.byCat[c])});
@@ -498,8 +535,8 @@ function showReport(){
     (daysRows.length?daysRows.map(r=>`<tr><td>${r.label}</td><td>${f(r.inc)}</td><td>${f(r.sal)}</td><td>${f(r.exp)}</td><td class="${cls(r.net)}">${f(r.net)}</td><td>${f(r.payDaily)}</td><td class="${cls(r.final)}">${f(r.final)}</td></tr>`).join(''):'<tr><td colspan="7" class="hint">ما في بيانات بهاي الفترة</td></tr>')+
     `</tbody><tfoot><tr><td>المجموع</td><td>${f(T.inc)}</td><td>${f(T.sal)}</td><td>${f(T.exp)}</td><td>${f(T.net)}</td><td>${f(T.payDaily)}</td><td>${f(T.final)}</td></tr></tfoot></table></div>`;
   } else {
-    const day=DB.days[iso(R.s)];
-    if(day)h+=`<h3>تفصيل الدخل</h3><table><tbody><tr><td>كاش</td><td>${f(day.income.cash)}</td></tr><tr><td>فيزا / بطاقات</td><td>${f(day.income.card)}</td></tr><tr><td>تطبيقات توصيل</td><td>${f(day.income.app)}</td></tr></tbody><tfoot><tr><td>المجموع</td><td>${f(T.inc)}</td></tr></tfoot></table>`;
+    const day=DB.days[iso(R.s)]||(posDay(iso(R.s)).count?dayObj(iso(R.s)):null);
+    if(day||posDay(iso(R.s)).count)h+=`<h3>تفصيل الدخل</h3><table><tbody><tr><td>كاش</td><td>${f(day.income.cash)}</td></tr><tr><td>فيزا / بطاقات</td><td>${f(day.income.card)}</td></tr><tr><td>تطبيقات توصيل</td><td>${f(day.income.app)}</td></tr>${posDay(iso(R.s)).count?`<tr><td>مبيعات الكاشير (POS)</td><td>${f(posDay(iso(R.s)).total)}</td></tr>`:''}</tbody><tfoot><tr><td>المجموع</td><td>${f(T.inc)}</td></tr></tfoot></table>`;
   }
   // what was paid
   let pd=0,po=0;CATS.forEach(c=>{pd+=B.paidCat[c].daily;po+=B.paidCat[c].other});
@@ -563,11 +600,13 @@ $('restore').onchange=e=>{const fl=e.target.files[0];if(!fl)return;const rd=new 
   persist();loadDay();renderPayments();toast('تمّت إضافة البيانات')}catch(x){alert('الملف مش صحيح')}finally{e.target.value=''}};rd.readAsText(fl)};
 
 // ---------- password for every delete ----------
-const DEL_PASS='2002';
+const DEFAULT_ADMIN='2002';
+async function sha(t){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('basita:'+t));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
+async function isAdmin(p){if(!DB.admin||!DB.admin.hash){DB.admin={hash:await sha(DEFAULT_ADMIN)};persist()}return (await sha(p))===DB.admin.hash}
 function askPass(msg){return new Promise(res=>{
   const box=$('pw'),inp=$('pw-in');$('pw-msg').textContent=msg;inp.value='';$('pw-err').classList.add('hidden');box.classList.remove('hidden');setTimeout(()=>inp.focus(),30);
   const done=v=>{box.classList.add('hidden');$('pw-ok').onclick=$('pw-no').onclick=inp.onkeydown=null;res(v)};
-  const ok=()=>{if(inp.value===DEL_PASS)done(true);else{$('pw-err').classList.remove('hidden');inp.value='';inp.focus()}};
+  const ok=async()=>{if(await isAdmin(inp.value))done(true);else{$('pw-err').classList.remove('hidden');inp.value='';inp.focus()}};
   $('pw-ok').onclick=ok;$('pw-no').onclick=()=>done(false);
   inp.onkeydown=e=>{if(e.key==='Enter')ok();if(e.key==='Escape')done(false)};
 })}
@@ -591,10 +630,60 @@ async function zapMonth(){const m=$('z-month').value;if(!m)return alert('اخت�
 async function zapAll(){if(!await askPass('أكيد بدك تحذف كل البيانات وتبدأ من جديد؟ رح ننزّل نسخة احتياطية أول.'))return;
   backup();DB={days:{},payments:[],employees:[]};persist();loadDay();renderPayments();toast('انحذف كل شي. النسخة الاحتياطية انحفظت')}
 
+// ---------- admin lock ----------
+function lock(){$('lock').classList.remove('hidden');$('lock-in').value='';$('lock-err').classList.add('hidden');setTimeout(()=>$('lock-in').focus(),30)}
+async function unlock(){if(await isAdmin($('lock-in').value)){$('lock').classList.add('hidden');idle=0}else{$('lock-err').classList.remove('hidden');$('lock-in').value='';$('lock-in').focus()}}
+$('lock-ok').onclick=unlock;$('lock-in').onkeydown=e=>{if(e.key==='Enter')unlock()};$('lockbtn').onclick=lock;
+let idle=0;['mousemove','keydown','click','touchstart'].forEach(ev=>addEventListener(ev,()=>idle=0,{passive:true}));
+setInterval(()=>{if(++idle>=15&&$('lock').classList.contains('hidden'))lock()},60000); // lock after 15 idle minutes
+async function changeAdmin(){
+  const o=$('ap-old').value,n=$('ap-new').value,n2=$('ap-new2').value;
+  if(!await isAdmin(o))return alert('كلمة السر الحالية غلط');
+  if(n.length<4)return alert('الجديدة لازم تكون 4 أحرف أو أرقام على الأقل');
+  if(n!==n2)return alert('الكلمتين الجداد مش زي بعض');
+  DB.admin={hash:await sha(n)};persist();['ap-old','ap-new','ap-new2'].forEach(i=>$(i).value='');toast('تغيّرت كلمة سر المدير');
+}
+
+// ---------- POS (cashier) ----------
+let POS_SALES=[];
+const HASPOS=!!(window.basita&&window.basita.posSales);
+function loadPosSales(){try{if(HASPOS)POS_SALES=window.basita.posSales()||[]}catch(e){}}
+function posDay(k){const r={cash:0,card:0,total:0,count:0};for(const s of POS_SALES)if(s.date===k&&!s.voided){r[s.method]+=num(s.total);r.total+=num(s.total);r.count++}return r}
+function posCfg(){if(!DB.pos)DB.pos={menu:[],users:[]};DB.pos.menu=DB.pos.menu||[];DB.pos.users=DB.pos.users||[];return DB.pos}
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+function addUser(){const n=$('u-name').value.trim(),p=$('u-pin').value.trim(),c=posCfg();
+  if(!n)return alert('اكتب اسم الكاشير');if(!/^\d{4,8}$/.test(p))return alert('الرقم السري لازم يكون من 4 لـ 8 أرقام');
+  if(c.users.some(u=>u.pin===p))return alert('هاد الرقم السري مستعمل لكاشير ثاني');
+  c.users.push({id:uid(),name:n,pin:p,active:true});persist();$('u-name').value='';$('u-pin').value='';renderPos();toast('انضاف الكاشير')}
+async function delUser(id){const c=posCfg(),u=c.users.find(x=>x.id===id);if(!await askPass('تحذف الكاشير "'+u.name+'"؟'))return;c.users=c.users.filter(x=>x.id!==id);persist();renderPos()}
+function toggleUser(id){const u=posCfg().users.find(x=>x.id===id);u.active=u.active===false;persist();renderPos()}
+function addItem(){const c=posCfg(),cat=$('m-cat').value.trim()||'عام',n=$('m-name').value.trim(),pr=num($('m-price').value);
+  if(!n)return alert('اكتب اسم الصنف');if(pr<=0)return alert('اكتب السعر');
+  c.menu.push({id:uid(),cat,name:n,price:pr});persist();$('m-name').value='';$('m-price').value='';$('m-name').focus();renderPos();toast('انضاف الصنف')}
+async function delItem(id){const c=posCfg(),m=c.menu.find(x=>x.id===id);if(!await askPass('تحذف الصنف "'+m.name+'"؟'))return;c.menu=c.menu.filter(x=>x.id!==id);persist();renderPos()}
+function setPrice(id,v){const m=posCfg().menu.find(x=>x.id===id);const pr=num(v);if(pr<=0){renderPos();return alert('السعر لازم يكون أكبر من صفر')}m.price=pr;persist();toast('انحفظ السعر')}
+async function voidSale(id,v){if(v&&!await askPass('تلغي هاي الفاتورة؟ (ما رح تنحسب بالدخل)'))return;if(!window.basita.posVoid(id,v))return alert('ما قدرنا نحفظ');loadPosSales();renderPos();calc()}
+function renderPos(){
+  const c=posCfg();
+  if(!HASPOS){$('pos-addr').innerHTML='<p class="hint">الكاشير بشتغل بس من برنامج بسيطة على الكمبيوتر (مش من ملف المتصفح).</p>'}
+  else{const info=window.basita.posInfo();
+    $('pos-addr').innerHTML=(info.urls.length?`<p>على أي تابلت أو موبايل أو كمبيوتر على <b>نفس الواي فاي</b>، افتح المتصفح واكتب:</p>`+info.urls.map(u=>`<div style="direction:ltr;text-align:center;font-size:30px;font-weight:800;color:var(--brand2);background:var(--soft);border-radius:12px;padding:10px;margin:6px 0">${u}</div>`).join(''):'<p class="req">هاد الكمبيوتر مش متصل بواي فاي هلأ.</p>')+
+    `<p class="hint">خلّي هاد البرنامج مفتوح طول ما الكاشير شغّال. الفواتير بتنحفظ على هاد الكمبيوتر وبتدخل لحالها على دخل اليوم.</p>`}
+  $('u-table').innerHTML=c.users.length?'<thead><tr><th>الاسم</th><th>الرقم السري</th><th>الحالة</th><th></th></tr></thead><tbody>'+c.users.map(u=>`<tr><td>${esc(u.name)}</td><td style="direction:ltr;text-align:right">${'•'.repeat(u.pin.length)}</td><td><button class="btn small ${u.active===false?'':'ghost'}" onclick="toggleUser('${u.id}')">${u.active===false?'موقوف · فعّل':'شغّال · أوقف'}</button></td><td><button class="btn del" onclick="delUser('${u.id}')">✕</button></td></tr>`).join('')+'</tbody>':'<tr><td class="hint">ما في كاشيرية. زيد أول واحد.</td></tr>';
+  $('m-cats').innerHTML=[...new Set(c.menu.map(m=>m.cat))].map(x=>`<option value="${esc(x)}">`).join('');
+  const menu=[...c.menu].sort((a,b)=>a.cat.localeCompare(b.cat,'ar'));
+  $('m-table').innerHTML=menu.length?'<thead><tr><th>القسم</th><th>الصنف</th><th>السعر</th><th></th></tr></thead><tbody>'+menu.map(m=>`<tr><td>${esc(m.cat)}</td><td>${esc(m.name)}</td><td><input type="number" step="0.001" min="0" value="${m.price}" style="width:110px" onchange="setPrice('${m.id}',this.value)"></td><td><button class="btn del" onclick="delItem('${m.id}')">✕</button></td></tr>`).join('')+'</tbody>':'<tr><td class="hint">ما في أصناف. زيد أول صنف.</td></tr>';
+  const d=$('s-date').value||today(),list=POS_SALES.filter(x=>x.date===d).sort((a,b)=>b.no-a.no),pd=posDay(d);
+  $('s-table').innerHTML=list.length?'<thead><tr><th>#</th><th>الوقت</th><th>الكاشير</th><th>الأصناف</th><th>الدفع</th><th>المبلغ</th><th></th></tr></thead><tbody>'+list.map(x=>`<tr style="${x.voided?'opacity:.45;text-decoration:line-through':''}"><td>${x.no}</td><td>${x.time}</td><td>${esc(x.cashier||'')}</td><td>${x.items.map(i=>esc(i.name)+(i.qty>1?' ×'+i.qty:'')).join('، ')}</td><td>${x.method==='cash'?'كاش':'فيزا'}</td><td>${f(x.total)}</td><td>${x.voided?`<button class="btn ghost small" onclick="voidSale('${x.id}',false)">رجّعها</button>`:`<button class="btn del small" onclick="voidSale('${x.id}',true)">ألغِ</button>`}</td></tr>`).join('')+`</tbody><tfoot><tr><td colspan="5">المجموع (${pd.count} فاتورة · كاش ${f(pd.cash)} · فيزا ${f(pd.card)})</td><td colspan="2">${f(pd.total)}</td></tr></tfoot>`:'<tr><td class="hint">ما في فواتير بهاد اليوم.</td></tr>';
+}
+$('s-date').onchange=renderPos;
+loadPosSales();
+if(HASPOS)window.basita.onPos(()=>{loadPosSales();calc();if(!$('tab-pos').classList.contains('hidden'))renderPos()});
+
 // ---------- init ----------
 $('d-date').value=today();$('p-date').value=today();$('p-month').value=today().slice(0,7);
 $('rp-date').value=today();$('rp-month').value=today().slice(0,7);$('z-day').value=today();$('z-month').value=today().slice(0,7);
-setCat(CATS[0]);setSrc('');$('p-paydate').value=today();loadDay();
+setCat(CATS[0]);setSrc('');$('p-paydate').value=today();$('s-date').value=today();posCfg();loadDay();lock();
 </script>
 </body>
 </html>

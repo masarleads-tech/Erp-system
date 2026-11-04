@@ -1,23 +1,40 @@
 {
   "name": "basita",
   "productName": "Basita",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "نظام حسابات مطعم بسيطة",
   "main": "main.js",
   "author": "Basita",
-  "scripts": { "start": "electron .", "dist": "electron-builder --win nsis --publish never" },
-  "devDependencies": { "electron": "38.8.6", "electron-builder": "26.0.12" },
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis --publish never"
+  },
+  "devDependencies": {
+    "electron": "38.8.6",
+    "electron-builder": "26.0.12"
+  },
   "build": {
     "appId": "com.basita.erp",
     "productName": "Basita",
-    "files": ["index.html", "main.js", "preload.js", "data.js"],
-    "win": { "target": "nsis", "artifactName": "Basita-Setup-${version}.exe" },
+    "files": [
+      "index.html",
+      "main.js",
+      "preload.js",
+      "data.js",
+      "pos-server.js",
+      "pos.html"
+    ],
+    "win": {
+      "target": "nsis",
+      "artifactName": "Basita-Setup.exe"
+    },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": "always",
       "createStartMenuShortcut": true,
-      "shortcutName": "Start ERP"
+      "shortcutName": "Start ERP",
+      "include": "build/installer.nsh"
     }
   }
 }
