@@ -110,7 +110,9 @@ async function login(){
   catch(e){$('lerr').textContent='مش متصل بجهاز الحسابات. تأكد إنك على نفس الواي فاي.'}
 }
 function showPr(p){const b=$('prbar');if(!p||p.state!=='down'){b.classList.add('hidden');return}b.textContent='🖨️ الطابعة مش شغّالة، الفواتير بتنحفظ بس ما بتنطبع. اتصل بيامن'+(p.phone?' على '+p.phone:'');b.classList.remove('hidden')}
-function start(d){showPr(d.printer);menu=d.menu||[];LS.set('basita_pos_menu',menu);if(d.cashier){cashierName=d.cashier;LS.set('basita_pos_cashier',cashierName)}$('who').textContent='👤 '+(cashierName||'');askBackup();
+function shop(n){if(!n)return;LS.set('basita_pos_shop',n);document.querySelector('header h1').textContent=n;document.title=n+' | الكاشير'}
+shop(LS.get('basita_pos_shop'));
+function start(d){showPr(d.printer);shop(d.shop);menu=d.menu||[];LS.set('basita_pos_menu',menu);if(d.cashier){cashierName=d.cashier;LS.set('basita_pos_cashier',cashierName)}$('who').textContent='👤 '+(cashierName||'');askBackup();
   $('loginv').classList.add('hidden');$('posv').classList.remove('hidden');$('out').classList.remove('hidden');renderMenu();renderCart()}
 $('out').onclick=()=>{if(cart.length&&!confirm('في فاتورة مش مدفوعة. بدك تطلع؟'))return;sessionStorage.removeItem('basita_pin');location.reload()};
 

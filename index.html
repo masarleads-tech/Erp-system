@@ -99,6 +99,17 @@ tfoot td{font-weight:800;background:var(--soft)}
 .chip{display:inline-block;padding:4px 10px;border-radius:20px;background:var(--soft);color:var(--brand2);margin:3px;cursor:pointer;font-size:14px;font-weight:700;border:0;font-family:inherit}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 18px;border-radius:10px;display:none;z-index:9}
 .hidden{display:none!important}
+.ailock{position:relative;min-height:420px}
+.ailock.off .aibody{filter:blur(5px);opacity:.55;pointer-events:none;user-select:none}
+.aiover{display:none;position:absolute;inset:0;z-index:2;justify-content:center;align-items:flex-start;padding-top:70px}
+.ailock.off .aiover{display:flex}
+.aiover>div{background:#fff;border:3px solid var(--brand);border-radius:18px;padding:18px 28px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,.15)}
+.aiover b{display:block;font-size:30px;color:var(--brand2)}
+.aimsg{padding:10px 14px;border-radius:14px;margin:8px 0;white-space:pre-wrap;line-height:1.7;max-width:88%}
+.aimsg.u{background:var(--soft);margin-inline-start:auto}
+.aimsg.a{background:#f3f3f3}
+#ai-chat{max-height:55vh;overflow:auto;margin:10px 0}
+#cam video{width:100%;max-height:60vh;background:#000;border-radius:12px}
 .pw{position:fixed;inset:0;background:rgba(0,0,0,.45);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:20;padding:16px}
 .pwbox{background:var(--card);border-radius:14px;padding:20px;width:100%;max-width:400px}
 .pwbox p{line-height:1.7}
@@ -118,13 +129,14 @@ tfoot td{font-weight:800;background:var(--soft)}
 </head>
 <body>
 <header>
-  <div style="display:flex;align-items:center;gap:10px"><img src="img/logo.png" alt="" style="width:52px;height:52px"><div><h1>بسيطة</h1><small>نظام حسابات المطعم</small></div></div>
+  <div style="display:flex;align-items:center;gap:10px"><img src="img/logo.png" alt="" style="width:52px;height:52px"><div><h1 id="shop-name">بسيطة</h1><small>نظام حسابات المطعم</small></div></div>
   <nav>
     <button data-tab="daily" class="on">اليومية</button>
     <button data-tab="pay">الدفعات</button>
     <button data-tab="rep">التقارير</button>
     <button data-tab="pos">الكاشير</button>
     <button data-tab="stock">المخزن</button>
+    <button data-tab="ai">🤖 المساعد</button>
     <button data-tab="set">نسخة احتياطية واستيراد</button>
     <button data-tab="tech" id="tech-btn" class="hidden">🛠️ الدعم الفني</button>
     <button id="lockbtn" title="قفل">🔒 قفل</button>
@@ -305,10 +317,67 @@ tfoot td{font-weight:800;background:var(--soft)}
 </section>
 
 <!-- ============ BACKUP ============ -->
+<section id="tab-ai" class="hidden">
+  <div class="ailock off" id="ai-lock">
+    <div class="aibody" id="ai-body" inert>
+      <div class="card">
+        <h2>🤖 اسأل <span class="pf-name">بسيطة</span></h2>
+        <p class="hint">اسأل عن المبيعات، الأرباح، الرواتب، المخزن، أو أي معلومة عن المطعم. المساعد بقرأ بياناتك بس، وما بعدّل إشي.</p>
+        <div id="ai-quick">
+          <button class="chip" data-q="كم بعنا اليوم وكم الصافي؟">كم بعنا اليوم؟</button>
+          <button class="chip" data-q="قارن مبيعات هالأسبوع بالأسبوع اللي قبله">هالأسبوع والأسبوع اللي قبله</button>
+          <button class="chip" data-q="شو أكثر 5 أصناف انباعت هالشهر وكم ربحها؟">أكثر الأصناف مبيعاً</button>
+          <button class="chip" data-q="شو المواد اللي قربت تخلص من المخزن؟">شو قرب يخلص؟</button>
+          <button class="chip" data-q="في دفعات لسا ما انْدفعت؟ كم مجموعها؟">دفعات مش مدفوعة</button>
+          <button class="chip" data-q="عرّفني عن حالك وعن المطعم">مين انت؟</button>
+        </div>
+        <div id="ai-chat"></div>
+        <textarea id="ai-q" rows="2" placeholder="اكتب سؤالك هون… (Enter للإرسال)"></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+          <button class="btn" id="ai-send">اسأل</button>
+          <button class="btn ghost small" id="ai-new">محادثة جديدة</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>📷 فاتورة بالصورة</h2>
+        <p class="hint">صوّر فاتورة المورّد، والمساعد بيقرأ التاريخ والمبلغ والنوع. انت بتراجعها، وهي ما بتنحفظ إلا لما تكبس "احفظ الدفعة".</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn" id="ai-cam">📷 صوّر فاتورة</button>
+          <label class="btn ghost" style="margin:0;color:var(--brand2)">🖼️ اختار صورة<input type="file" accept="image/*" id="ai-file" class="hidden"></label>
+        </div>
+        <div id="ai-bill" style="margin-top:12px"></div>
+      </div>
+    </div>
+    <div class="aiover" id="ai-over"><div><b>اشبك رقم الai</b><small class="hint">الدعم الفني بيحط مفتاح الذكاء الاصطناعي وبيختبره، وبعدها المساعد والفواتير بالصورة بيشتغلوا</small></div></div>
+  </div>
+</section>
+
 <section id="tab-tech" class="hidden">
   <div class="card" style="border:2px solid var(--brand)">
     <h2>🛠️ الدعم الفني</h2>
     <p class="hint">هاد القسم بس للدعم الفني (السوبر أدمن). المدير العادي ما بشوفه.</p>
+  </div>
+  <div class="card">
+    <h2>🏪 ملف المطعم</h2>
+    <p class="hint">هاي هوية المطعم. الاسم بيطلع فوق بالبرنامج وعلى الكاشير والفاتورة المطبوعة، والمساعد بيعرّف عن حاله فيه وبيجاوب منها لما حدا يسأل عن المطعم.</p>
+    <div class="row">
+      <div><label for="pf-name">اسم المطعم</label><input id="pf-name" placeholder="بسيطة"></div>
+      <div><label for="pf-slogan">الشعار</label><input id="pf-slogan" placeholder="لا تعقدها"></div>
+      <div><label for="pf-kind">نوع المطعم</label><input id="pf-kind" placeholder="هوت دوغ وبرغر"></div>
+    </div>
+    <div class="row">
+      <div><label for="pf-owner">المالك</label><input id="pf-owner"></div>
+      <div><label for="pf-phone">تلفون المطعم</label><input id="pf-phone" type="tel" style="direction:ltr;text-align:right"></div>
+      <div><label for="pf-hours">ساعات الدوام</label><input id="pf-hours" placeholder="مثلاً: كل يوم 12 الظهر لـ 2 بالليل"></div>
+    </div>
+    <div class="row">
+      <div><label for="pf-address">العنوان</label><input id="pf-address" placeholder="المدينة، الشارع، قرب…"></div>
+      <div><label for="pf-delivery">التوصيل</label><input id="pf-delivery" placeholder="مثلاً: طلبات، كريم، توصيل خاص"></div>
+      <div><label for="pf-social">السوشال ميديا</label><input id="pf-social" placeholder="انستغرام، فيسبوك…" style="direction:ltr;text-align:right"></div>
+    </div>
+    <label for="pf-about">نبذة عن المطعم</label>
+    <textarea id="pf-about" rows="3" placeholder="شو بميّزكم، من إيمتى فاتحين، أي معلومة بدك المساعد يعرفها…"></textarea>
+    <div style="margin-top:12px"><button class="btn" id="pf-save">احفظ ملف المطعم</button></div>
   </div>
   <div class="card">
     <h2>🧾 طابعة الفواتير</h2>
@@ -387,6 +456,14 @@ tfoot td{font-weight:800;background:var(--soft)}
     <button class="btn" style="width:100%;margin-top:12px" id="lock-ok">ادخل</button>
   </div>
 </div>
+<div id="cam" class="pw hidden" style="z-index:30" role="dialog" aria-modal="true">
+  <div class="card" style="width:min(720px,100%);margin:0">
+    <h2>📷 صوّر الفاتورة</h2>
+    <video id="cam-v" autoplay playsinline muted></video>
+    <p class="hint">خلّي الفاتورة كلها جوّا الصورة وبإضاءة منيحة.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="cam-snap">التقط</button><button class="btn ghost" id="cam-x">إلغاء</button></div>
+  </div>
+</div>
 <div id="mb" class="pw hidden" style="z-index:40" role="dialog" aria-modal="true" aria-labelledby="mb-msg">
   <div class="pwbox">
     <p id="mb-msg" style="white-space:pre-line;font-size:17px"></p>
@@ -443,12 +520,13 @@ function toast(m){const t=$('toast');t.textContent=m;t.style.display='block';cle
 // ---------- tabs ----------
 document.querySelectorAll('nav button[data-tab]').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('nav button[data-tab]').forEach(x=>x.classList.toggle('on',x===b));
-  ['daily','pay','rep','pos','stock','set','tech'].forEach(t=>$('tab-'+t).classList.toggle('hidden',t!==b.dataset.tab));
+  ['daily','pay','rep','pos','stock','ai','set','tech'].forEach(t=>$('tab-'+t).classList.toggle('hidden',t!==b.dataset.tab));
   if(b.dataset.tab==='pay')renderPayments();
   if(b.dataset.tab==='rep')showReport();
   if(b.dataset.tab==='pos')renderPos();
   if(b.dataset.tab==='stock')renderStock();
-  if(b.dataset.tab==='tech'){loadPrinters();aiLoad()}
+  if(b.dataset.tab==='tech'){loadPrinters();aiLoad();profLoad()}
+  if(b.dataset.tab==='ai')aiGate();
 });
 
 // ---------- daily wizard ----------
@@ -748,7 +826,7 @@ $('restore').onchange=e=>{const fl=e.target.files[0];if(!fl)return;const rd=new 
     if(d.pos&&(!DB.pos||!(DB.pos.menu||[]).length&&!(DB.pos.users||[]).length))DB.pos=d.pos; // only if this PC has no POS setup yet
     if(d.stock&&(!DB.stock||!DB.stock.moves.length))DB.stock=d.stock;
   } else {
-    if(!await askPass('هاد رح يستبدل كل البيانات الحالية بالنسخة الاحتياطية. متأكد؟'))return;const adm=DB.admin;DB=d;DB.employees=DB.employees||[];if(!DB.admin)DB.admin=adm;
+    if(!await askPass('هاد رح يستبدل كل البيانات الحالية بالنسخة الاحتياطية. متأكد؟'))return;const adm=DB.admin,prof=DB.profile;DB=d;DB.employees=DB.employees||[];if(!DB.admin)DB.admin=adm;if(!DB.profile&&prof)DB.profile=prof;
   }
   stockCfg();posCfg();
   persist();loadDay();renderPayments();toast('تمّت إضافة البيانات')}catch(x){alert('الملف مش صحيح')}finally{e.target.value=''}};rd.readAsText(fl)};
@@ -997,10 +1075,80 @@ function aiShow(st){$('ai-model').innerHTML=st.models.map(m=>`<option value="${m
 async function aiLoad(){if(!HASAI){$('ai-key').closest('.card').classList.add('hidden');return}aiShow(await window.basita.aiStatus())}
 if(HASAI){
   $('ai-save').onclick=async()=>{if(!SUPER)return;const k=$('ai-key').value.trim();if(k&&!/^sk-ant-/.test(k)&&!await ask('المفتاح ما بلّش بـ sk-ant-. متأكد إنه صح؟','احفظه'))return;
-    aiShow(await window.basita.aiSave(k,$('ai-model').value));$('ai-key').value='';toast('انحفظ')};
+    aiShow(await window.basita.aiSave(k,$('ai-model').value));$('ai-key').value='';toast('انحفظ');aiGate()};
   $('ai-test').onclick=async()=>{if(!SUPER)return;$('ai-result').textContent='… عم نختبر';const r=await window.basita.aiTest();
-    $('ai-result').textContent=r.ok?'✓ الاتصال شغّال. الموديل: '+r.model+' · الرد: '+r.reply+' · الوقت: '+(r.ms/1000).toFixed(1)+' ث':'✕ '+r.reason};
-  $('ai-clear').onclick=async()=>{if(!SUPER)return;if(!await askPass('تمسح مفتاح الذكاء الاصطناعي؟'))return;aiShow(await window.basita.aiClear());toast('انمسح المفتاح')};
+    $('ai-result').textContent=r.ok?'✓ الاتصال شغّال. الموديل: '+r.model+' · الرد: '+r.reply+' · الوقت: '+(r.ms/1000).toFixed(1)+' ث':'✕ '+r.reason;aiGate()};
+  $('ai-clear').onclick=async()=>{if(!SUPER)return;if(!await askPass('تمسح مفتاح الذكاء الاصطناعي؟'))return;aiShow(await window.basita.aiClear());toast('انمسح المفتاح');aiGate()};
+}
+// ---------- restaurant profile (super admin) ----------
+const PF=['name','slogan','kind','owner','phone','hours','address','delivery','social','about'];
+function profile(){DB.profile=Object.assign({name:'بسيطة',slogan:'لا تعقدها',kind:'مطعم هوت دوغ وبرغر'},DB.profile||{});return DB.profile}
+function profShow(){const n=profile().name||'بسيطة';$('shop-name').textContent=n;document.title=n+' | نظام الحسابات';document.querySelectorAll('.pf-name').forEach(e=>e.textContent=n)}
+function profLoad(){const p=profile();PF.forEach(k=>$('pf-'+k).value=p[k]||'')}
+$('pf-save').onclick=()=>{if(!SUPER)return;const p=profile();PF.forEach(k=>p[k]=$('pf-'+k).value.trim());if(!p.name)p.name='بسيطة';persist();profShow();profLoad();toast('انحفظ ملف المطعم')};
+
+// ---------- AI assistant (admin) — blurred and locked until the super admin connects and tests a key ----------
+let AION=false,AIHIST=[],AIBUSY=false;
+async function aiGate(){let on=false;try{if(HASAI){const st=await window.basita.aiStatus();on=!!(st.hasKey&&st.lastTest&&st.lastTest.ok)}}catch(e){}
+  AION=on;$('ai-lock').classList.toggle('off',!on);$('ai-body').inert=!on;$('ai-over').setAttribute('aria-hidden',on?'true':'false')}
+// a compact picture of the business for the assistant: last 60 days, unpaid payments, menu with cost, storage, best sellers
+function aiContext(){
+  const T=today(),from=iso(new Date(Date.now()-59*864e5)),r3=n=>Math.round(num(n)*1000)/1000,days=[];
+  const ks=new Set([...Object.keys(DB.days),...POS_SALES.map(s=>s.date)]);
+  [...ks].filter(k=>k>=from&&k<=T).sort().forEach(k=>{const d=dayObj(k),t=dayTotals(d,k),p=posDay(k),pd=DB.payments.filter(x=>x.paidFrom==='daily'&&(x.paidDate||x.date)===k).reduce((a,x)=>a+num(x.amount),0);
+    days.push({date:k,income_manual:r3(num(d.income.cash)+num(d.income.card)+num(d.income.app)),pos_cash:r3(p.cash),pos_card:r3(p.card),pos_bills:p.count,income_total:r3(t.inc),salaries:r3(t.sal),old_expenses:r3(t.exp),net:r3(t.net),paid_from_daily:r3(pd),net_after_payments:r3(t.net-pd)})});
+  const pays=DB.payments.filter(x=>x.date>=from).sort((a,b)=>a.date<b.date?-1:1).slice(-250).map(x=>({date:x.date,type:x.cat,amount:r3(x.amount),note:x.desc||x.reason||'',paid:x.paidFrom?(x.paidFrom==='daily'?'من دخل اليوم':'من برّا'):'لسا'}));
+  const unpaid=DB.payments.filter(x=>!x.paidFrom);
+  const menu=posCfg().menu.map(m=>({name:m.name,section:m.cat,price:r3(m.price),cost:r3(mealCost(m)),on_cashier:+m.price>0}));
+  const stock=stockCfg().items.map(k=>({name:k.name,unit:k.unit,in_stock:Math.round(stockLevel(k.id)),cost_each:r3(k.cost),warn_below:num(k.min),bought_today:boughtOn(k.id,T),used_today:used(k.id,T,T)}));
+  const best={};POS_SALES.forEach(s=>{if(s.voided||s.date<from)return;const mo=s.date.slice(0,7);(s.items||[]).forEach(i=>{const key=mo+'|'+i.name,b=best[key]||(best[key]={month:mo,item:i.name,qty:0,sales:0,cost:0});b.qty+=num(i.qty);b.sales+=num(i.price)*num(i.qty);b.cost+=num(i.cost)*num(i.qty)})});
+  const items=Object.values(best).map(b=>({month:b.month,item:b.item,qty:b.qty,sales:r3(b.sales),cost:r3(b.cost),profit:r3(b.sales-b.cost)})).sort((a,b)=>a.month<b.month?1:a.month>b.month?-1:b.qty-a.qty);
+  return JSON.stringify({today:T,weekday:new Date().toLocaleDateString('ar-JO',{weekday:'long'}),currency:'JOD',
+    notes:'income_total = الدخل اليدوي + مبيعات الكاشير. net = الدخل − الرواتب − المصاريف القديمة. الدفعات اللي انْدفعت من دخل اليوم بتنقص من net_after_payments.',
+    days,payments:pays,unpaid_payments:{count:unpaid.length,total:r3(unpaid.reduce((a,x)=>a+num(x.amount),0))},employees:DB.employees||[],menu,stock,items_sold_by_month:items})}
+function aiRender(){$('ai-chat').innerHTML=AIHIST.map(h=>`<div class="aimsg ${h.role==='user'?'u':'a'}">${esc(h.text)}</div>`).join('')+(AIBUSY?'<div class="aimsg a">… عم يفكّر</div>':'');$('ai-chat').scrollTop=1e9}
+async function aiAsk(q){q=(q||$('ai-q').value).trim();if(!q||AIBUSY||!AION)return;$('ai-q').value='';
+  const hist=AIHIST.slice();AIHIST.push({role:'user',text:q});AIBUSY=true;aiRender();loadPosSales();
+  let r;try{r=await window.basita.aiAsk({q,history:hist,ctx:aiContext(),profile:profile()})}catch(e){r={ok:false,reason:String(e.message||e)}}
+  AIBUSY=false;if(r.ok)AIHIST.push({role:'assistant',text:r.text+(r.cut?'\n…(الرد انقطع، اسأل سؤال أقصر)':'')});else{AIHIST.pop();$('ai-q').value=q;alert('ما زبط: '+r.reason)}
+  aiRender();if(r.locked)aiGate()}
+if(HASAI){
+  $('ai-send').onclick=()=>aiAsk();
+  $('ai-q').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();aiAsk()}};
+  $('ai-new').onclick=()=>{AIHIST=[];aiRender()};
+  document.querySelectorAll('#ai-quick [data-q]').forEach(b=>b.onclick=()=>aiAsk(b.dataset.q));
+}
+// bill photo: camera (or a picture file) → shrink → assistant reads it → admin checks it in the payment form
+let camStream=null;
+function camStop(){if(camStream)camStream.getTracks().forEach(t=>t.stop());camStream=null;$('cam').classList.add('hidden')}
+async function camOpen(){if(!AION)return;
+  try{camStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1920},height:{ideal:1080}}})}
+  catch(e){if(await ask('ما لقينا كاميرا شغّالة على هاد الجهاز. بدك تختار صورة الفاتورة من الجهاز؟','اختار صورة','إلغاء'))$('ai-file').click();return}
+  $('cam-v').srcObject=camStream;$('cam').classList.remove('hidden')}
+function shrink(src,w,h){const M=1600,r=Math.min(1,M/Math.max(w,h)),c=document.createElement('canvas');c.width=Math.round(w*r);c.height=Math.round(h*r);c.getContext('2d').drawImage(src,0,0,c.width,c.height);return c.toDataURL('image/jpeg',0.85)}
+async function billRead(dataUrl){if(!AION)return;const box=$('ai-bill');
+  box.innerHTML='<img src="'+dataUrl+'" alt="" style="max-width:220px;border-radius:10px;display:block;margin-bottom:8px"><p class="hint">… عم نقرأ الفاتورة</p>';
+  const cats=BASE_CATS.filter(c=>c!=='مشتريات المخزن');
+  let r;try{r=await window.basita.aiBill({image:dataUrl,cats,profile:profile()})}catch(e){r={ok:false,reason:String(e.message||e)}}
+  billShow(r,cats)}
+function billShow(r,cats){const box=$('ai-bill');
+  if(!r.ok){box.innerHTML='<p class="hint" style="color:var(--bad)">✕ '+esc(r.reason)+'</p>';if(r.locked)aiGate();return}
+  const b=r.bill||{};if(b.is_bill===false){box.innerHTML='<p class="hint" style="color:var(--bad)">✕ هاي الصورة ما بتبيّن إنها فاتورة. جرّب صورة أوضح.</p>';return}
+  const items=(b.items||[]).filter(i=>i&&i.name);const desc=[b.supplier,items.map(i=>i.name+(num(i.qty)?' ×'+num(i.qty):'')).join('، ')].filter(Boolean).join(' · ').slice(0,300);
+  const date=/^\d{4}-\d{2}-\d{2}$/.test(b.date||'')?b.date:today(),cat=cats.includes(b.category)?b.category:'';
+  box.innerHTML=`<div class="tablewrap"><table><tbody>
+    <tr><th>المورد</th><td>${esc(b.supplier||'—')}</td></tr><tr><th>التاريخ</th><td>${esc(date)}${b.date?'':' (مش واضح، حطينا اليوم)'}</td></tr>
+    <tr><th>النوع</th><td>${esc(cat||'اختار انت')}</td></tr><tr><th>المجموع</th><td><b>${f(num(b.total))}</b> دينار</td></tr>
+    ${items.length?'<tr><th>الأصناف</th><td>'+items.map(i=>esc(i.name)+' — '+num(i.qty)+' × '+f(num(i.price))).join('<br>')+'</td></tr>':''}
+    ${b.note?'<tr><th>ملاحظة</th><td>'+esc(b.note)+'</td></tr>':''}</tbody></table></div>
+    <button class="btn" id="bill-use" style="margin-top:10px">راجعها بالدفعات</button>`;
+  $('bill-use').onclick=()=>{if(cat)setCat(cat);$('p-date').value=date;$('p-amt').value=num(b.total)?r3j(b.total):'';$('p-desc').value=desc;
+    document.querySelector('nav button[data-tab="pay"]').click();$('p-amt').focus();toast('راجع الأرقام واكبس "احفظ الدفعة"')}}
+const r3j=n=>(Math.round(num(n)*1000)/1000).toString();
+if(HASAI){
+  $('ai-cam').onclick=camOpen;$('cam-x').onclick=camStop;
+  $('cam-snap').onclick=()=>{const v=$('cam-v');if(!v.videoWidth)return;const d=shrink(v,v.videoWidth,v.videoHeight);camStop();billRead(d)};
+  $('ai-file').onchange=e=>{const fl=e.target.files[0];e.target.value='';if(!fl)return;const im=new Image();im.onload=()=>{const d=shrink(im,im.naturalWidth,im.naturalHeight);URL.revokeObjectURL(im.src);billRead(d)};im.onerror=()=>alert('هاد الملف مش صورة');im.src=URL.createObjectURL(fl)};
 }
 // menu pictures: shrink to 360×300 here, then save on this computer (Documents\\Basita\\images)
 const IMGBASE=HASPOS?'http://127.0.0.1:'+window.basita.posInfo().port+'/img/':'';
@@ -1016,7 +1164,7 @@ if(HASPOS)window.basita.onPos(()=>{loadPosSales();calc();renderBuys();if(!$('tab
 // ---------- init ----------
 $('d-date').value=today();$('p-date').value=today();$('p-month').value=today().slice(0,7);
 $('rp-date').value=today();$('rp-month').value=today().slice(0,7);$('z-day').value=today();$('z-month').value=today().slice(0,7);
-setCat(BASE_CATS[0]);setSrc('');$('p-paydate').value=today();$('s-date').value=today();posCfg();stockCfg();seedV2();seedV3();seedV4();autoLinkAll(false);loadDay();lock();
+setCat(BASE_CATS[0]);setSrc('');$('p-paydate').value=today();$('s-date').value=today();posCfg();stockCfg();seedV2();seedV3();seedV4();autoLinkAll(false);profShow();aiGate();loadDay();lock();
 </script>
 </body>
 </html>

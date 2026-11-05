@@ -11,7 +11,8 @@ module.exports=function(app,ipcMain,getWin){
   const set=(st,msg)=>{state={state:st,msg:msg||'',fails};tell()};
   const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const f3=n=>(Math.round(n*1000)/1000).toFixed(3);
-  function receipt(s,width){
+  const prof=()=>{try{return JSON.parse(fs.readFileSync(dataFile,'utf8')).profile||{}}catch(e){return {}}};
+  function receipt(s,width){const P=prof();
     const rows=s.items.map(i=>`<tr><td class="n">${esc(i.name)}</td><td>${i.qty}</td><td>${f3(i.price*i.qty)}</td></tr>`).join('');
     const count=s.items.reduce((a,i)=>a+i.qty,0);
     return `<!doctype html><html dir="rtl" lang="ar"><head><meta charset="utf-8"><style>
@@ -22,13 +23,13 @@ module.exports=function(app,ipcMain,getWin){
       td.n,th.n{text-align:right;width:62%}th{border-bottom:1px solid #000;font-weight:700}.tot{font-size:${width<70?16:19}px;font-weight:700;display:flex;justify-content:space-between}
       .row{display:flex;justify-content:space-between}
     </style></head><body>
-      <h1>بسيطة</h1><p class="sub">لا تعقدها</p><hr>
+      <h1>${esc(P.name||'بسيطة')}</h1><p class="sub">${esc(P.slogan==null?'لا تعقدها':P.slogan)}</p>${P.address?'<p class="sub">'+esc(P.address)+'</p>':''}<hr>
       <div class="row"><span>فاتورة رقم ${s.no}</span><span>${esc(s.date)} ${esc(s.time)}</span></div>
       <div class="row"><span>الكاشير: ${esc(s.cashier||'')}</span><span>${s.method==='cash'?'كاش':'فيزا'}</span></div><hr>
       <table><tr><th class="n">الصنف</th><th>العدد</th><th>المبلغ</th></tr>${rows}</table><hr>
       <div class="row"><span>عدد القطع</span><span>${count}</span></div>
       <div class="tot"><span>المجموع</span><span>${f3(s.total)} دينار</span></div><hr>
-      <p class="c">شكراً لزيارتكم ❤</p><p class="c">&nbsp;</p>
+      <p class="c">شكراً لزيارتكم ❤</p>${P.phone?'<p class="c">'+esc(P.phone)+'</p>':''}<p class="c">&nbsp;</p>
     </body></html>`;
   }
   // print one receipt; resolves {ok, reason}

@@ -17,6 +17,7 @@ module.exports=function(app,ipcMain,getWin){
   }
   function saveSales(){const t=JSON.stringify(S);writeSafe(salesFile,t);writeSafe(path.join(bdir,'pos-sales-'+today()+'.json'),t);const w=getWin();if(w&&!w.isDestroyed())w.webContents.send('pos-changed')}
   const cfg=()=>{const d=readJSON(dataFile)||{};const c=d.pos||{menu:[],users:[]};c.stock=(d.stock&&d.stock.items)||[];return c};
+  const shopName=()=>{const d=readJSON(dataFile)||{};return (d.profile&&d.profile.name)||'بسيطة'};
   const printerInfo=()=>{try{const st=require('./printer.js').state();const d=readJSON(dataFile)||{};return {state:st.state,phone:(d.printer&&d.printer.phone)||''}}catch(e){return {state:'off'}}};
   const who=(c,pin)=>(c.users||[]).find(x=>x.pin&&String(pin)===String(x.pin)&&x.active!==false);
   const page=fs.readFileSync(path.join(__dirname,'pos.html'));
@@ -44,7 +45,7 @@ module.exports=function(app,ipcMain,getWin){
     const c=cfg();
     if(u.pathname==='/api/menu'){ // also used as cashier login
       const w=who(c,u.searchParams.get('pin'));if(!w)return send(res,403,{error:'pin'});
-      return send(res,200,{menu:(c.menu||[]).filter(m=>+m.price>0).map(m=>({id:m.id,cat:m.cat,name:m.name,price:+m.price,img:m.img||''})),cashier:w.name,printer:printerInfo()}); // no costs/links to the tablet; unpriced items hidden
+      return send(res,200,{menu:(c.menu||[]).filter(m=>+m.price>0).map(m=>({id:m.id,cat:m.cat,name:m.name,price:+m.price,img:m.img||''})),cashier:w.name,printer:printerInfo(),shop:shopName()}); // no costs/links to the tablet; unpriced items hidden
     }
     if(u.pathname==='/api/sale'&&req.method==='POST'){
       let body='';req.on('data',d=>{body+=d;if(body.length>200000)req.destroy()});
