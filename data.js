@@ -32,3 +32,30 @@ module.exports=function(app,ipcMain){
     }catch(err){e.returnValue=false}
   });
 };
+
+// Automatic backup every 30 minutes: Documents\Basita\backups\auto\basita-YYYY-MM-DD-HHmm.json
+// One file holds the ERP data and the POS sales together. Kept for 14 days.
+module.exports.autoBackup=function(app){
+  const dir=path.join(app.getPath('documents'),'Basita'),adir=path.join(dir,'backups','auto');
+  const pad=n=>String(n).padStart(2,'0');
+  function run(){
+    try{
+      fs.mkdirSync(adir,{recursive:true});
+      const read=f=>{try{return JSON.parse(fs.readFileSync(path.join(dir,f),'utf8'))}catch(e){return null}};
+      const data=read('basita-data.json'),pos=read('pos-sales.json');
+      if(!data&&!pos)return;
+      const txt=JSON.stringify({savedAt:new Date().toISOString(),data,pos});
+      const n=new Date(),name='basita-'+n.getFullYear()+'-'+pad(n.getMonth()+1)+'-'+pad(n.getDate())+'-'+pad(n.getHours())+pad(n.getMinutes())+'.json';
+      const tmp=path.join(adir,name+'.tmp'),fd=fs.openSync(tmp,'w');
+      try{fs.writeSync(fd,txt);fs.fsyncSync(fd)}finally{fs.closeSync(fd)}
+      fs.renameSync(tmp,path.join(adir,name));
+      const cut=Date.now()-14*24*3600*1000;
+      for(const f of fs.readdirSync(adir))if(/^basita-.*\.json$/.test(f)){const p=path.join(adir,f);try{if(fs.statSync(p).mtimeMs<cut)fs.unlinkSync(p)}catch(_){}}
+    }catch(e){}
+  }
+  // Only the local disk is used, so this keeps working with no WiFi or internet.
+  const every=+process.env.BASITA_BACKUP_MS||30*60*1000;
+  setTimeout(run,Math.min(60*1000,every)); // first copy one minute after opening
+  setInterval(run,every);                  // then every 30 minutes
+  app.on('before-quit',run);        // and once more when closing
+};
