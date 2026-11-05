@@ -148,6 +148,7 @@ tfoot td{font-weight:800;background:var(--soft)}
         <div><label>تطبيقات توصيل</label><input type="number" step="0.001" min="0" id="i-app" placeholder="0.000"></div>
       </div>
       <div id="i-pos" class="total hidden" style="background:var(--goodsoft)"><span>مبيعات الكاشير (POS)</span><span id="i-pos-v"></span></div>
+      <p class="hint" style="margin:4px 0 0">مبيعات الكاشير بتنضاف لحالها. بالخانات فوق اكتب بس الدخل اللي <b>مش</b> من الكاشير، عشان ما ينحسب مرتين.</p>
       <div class="total"><span>مجموع الدخل</span><span id="i-total">0.000</span></div>
     </div>
 
@@ -348,6 +349,12 @@ tfoot td{font-weight:800;background:var(--soft)}
     <button class="btn" style="width:100%;margin-top:12px" id="lock-ok">ادخل</button>
   </div>
 </div>
+<div id="mb" class="pw hidden" role="dialog" aria-modal="true" aria-labelledby="mb-msg">
+  <div class="pwbox">
+    <p id="mb-msg" style="white-space:pre-line;font-size:17px"></p>
+    <div class="nav2"><button class="btn ghost" id="mb-no">إلغاء</button><button class="btn" id="mb-ok">تمام</button></div>
+  </div>
+</div>
 <div id="pw" class="pw hidden" role="dialog" aria-modal="true" aria-labelledby="pw-msg">
   <div class="pwbox">
     <h2 style="color:var(--bad)">🔒 تأكيد الحذف</h2>
@@ -362,7 +369,10 @@ tfoot td{font-weight:800;background:var(--soft)}
 <script>
 // ---------- storage ----------
 const KEY='basita_erp_v1';
-const CATS=['مشتريات وادي الرمم','كنزا','نثرية','المجمدات','الخبز','مصاريف','مشتريات المخزن'];
+const BASE_CATS=['مشتريات وادي الرمم','كنزا','نثرية','المجمدات','الخبز','مشتريات المخزن'];
+// types shown in reports = the standard ones + any older type still found in saved payments (e.g. "مصاريف"), so no amount is ever left out of a total
+let CATS=BASE_CATS.slice();
+function refreshCats(){CATS=[...BASE_CATS,...new Set((DB&&DB.payments||[]).map(p=>p.cat).filter(c=>c&&!BASE_CATS.includes(c)))]}
 let DB;
 const DESK=window.basita&&window.basita.load; // desktop app: data lives in a file on disk
 try{if(DESK)DB=window.basita.load()}catch(e){}
@@ -477,10 +487,10 @@ $('d-date').onchange=()=>{if(autoT){clearTimeout(autoT);autoSave()}loadDay()};
 
 // ---------- payments ----------
 // each payment: paidFrom '' (not paid yet) | 'daily' (paid from the day's income) | 'other' (paid from outside); paidDate
-let cat=CATS[0],src='';
+refreshCats();let cat=BASE_CATS[0],src='';
 const SRC={'':'لسا ما انْدفعت',daily:'من دخل اليوم',other:'من برّا'};
 const isPaid=p=>p.paidFrom==='daily'||p.paidFrom==='other';
-$('cats').innerHTML=CATS.map(c=>`<button data-c="${c}">${c}</button>`).join('');
+$('cats').innerHTML=BASE_CATS.map(c=>`<button data-c="${c}">${c}</button>`).join('');
 $('p-filter').innerHTML+=CATS.map(c=>`<option>${c}</option>`).join('');
 function setCat(c){cat=c;document.querySelectorAll('#cats button').forEach(b=>b.classList.toggle('on',b.dataset.c===c));$('p-reason-wrap').classList.toggle('hidden',c!=='نثرية')}
 document.querySelectorAll('#cats button').forEach(b=>b.onclick=()=>setCat(b.dataset.c));
@@ -496,11 +506,11 @@ function savePayment(){
   $('p-month').value=date.slice(0,7);renderPayments();toast('انحفظت الدفعة');$('p-amt').focus();
 }
 async function delPayment(id){if(!await askPass('أكيد بدك تحذف هاي الدفعة؟'))return;DB.payments=DB.payments.filter(p=>p.id!==id);persist();renderPayments()}
-function payPayment(id,from){
+async function payPayment(id,from){
   const p=DB.payments.find(x=>x.id===id),d=$('p-paydate').value||today();
-  if(!confirm('تسجيل دفع '+f(p.amount)+' دينار ('+p.cat+') '+SRC[from]+' بتاريخ '+nice(d)+'؟'))return;
+  if(!await ask('تسجيل دفع '+f(p.amount)+' دينار ('+p.cat+') '+SRC[from]+' بتاريخ '+nice(d)+'؟','سجّل'))return;
   p.paidFrom=from;p.paidDate=d;persist();renderPayments();toast('انْدفعت')}
-function unpayPayment(id){if(!confirm('ترجّعها لـ "لسا ما انْدفعت"؟'))return;const p=DB.payments.find(x=>x.id===id);p.paidFrom='';p.paidDate='';persist();renderPayments()}
+async function unpayPayment(id){if(!await ask('ترجّعها لـ "لسا ما انْدفعت"؟','رجّعها'))return;const p=DB.payments.find(x=>x.id===id);p.paidFrom='';p.paidDate='';persist();renderPayments()}
 function renderPayments(){
   const m=$('p-month').value,fc=$('p-filter').value,st=$('p-status').value;
   const list=DB.payments.filter(p=>(!m||p.date.startsWith(m))&&(!fc||p.cat===fc)&&(!st||(st==='unpaid'?!isPaid(p):isPaid(p)))).sort((a,b)=>b.date.localeCompare(a.date));
@@ -526,6 +536,7 @@ function range(){
 }
 const paidOn=(k,from)=>DB.payments.filter(p=>p.paidFrom===from&&p.paidDate===k).reduce((a,p)=>a+num(p.amount),0);
 function buildReport(RR){
+  refreshCats();
   const R=RR||range(),rows=[];
   for(let d=new Date(R.s);d<=R.e;d.setDate(d.getDate()+1)){
     const k=iso(d),day=DB.days[k],t=dayTotals(day||dayObj(k),k),pdk=posDay(k);
@@ -632,8 +643,6 @@ const REPORTS=[
    '<h3>حسب المادة</h3>'+tbl(['المادة','الكمية اللي طلعت','التكلفة'],Object.entries(by).map(([n,v])=>[esc(n),f0(v.q)+' '+esc(v.u),f(v.c)]),['المجموع','',f(cost)])+'<p class="hint">التكلفة محسوبة بسعر المادة وقت البيع. غيّر التكاليف من تبويب المخزن.</p>'}},
  {k:'sal',n:'👥 الرواتب',d:'حسب الموظف وحسب اليوم',fn:B=>hdr(B,'الرواتب')+'<h3>حسب الموظف</h3>'+tbl(['الموظف','المبلغ','عدد الأيام'],Object.entries(B.perEmp).map(([n,a])=>[esc(n),f(a),B.sal.filter(x=>(x.name||'بدون اسم')===n).length]),['المجموع',f(B.T.sal),''])+'<h3>التفاصيل</h3>'+tbl(['التاريخ','الموظف','المبلغ'],B.sal.map(x=>[x.date,esc(x.name),f(x.amount)]))},
  {k:'paytype',n:'🧺 الدفعات حسب النوع',d:'المسجّل والمدفوع لكل نوع',fn:B=>hdr(B,'الدفعات حسب النوع')+tbl(['النوع','مسجّل بالفترة','انْدفع من اليومية','انْدفع من برّا'],CATS.map(c=>[c,f(B.T.byCat[c]),f(B.paidCat[c].daily),f(B.paidCat[c].other)]),['المجموع',f(B.T.pay),f(CATS.reduce((a,c)=>a+B.paidCat[c].daily,0)),f(CATS.reduce((a,c)=>a+B.paidCat[c].other,0))])+'<h3>التفاصيل</h3>'+tbl(['التاريخ','النوع','المبلغ','البيان','الدفع'],B.payments.map(p=>[p.date,esc(p.cat),f(p.amount),esc(p.desc||p.reason),isPaid(p)?SRC[p.paidFrom]+' ('+p.paidDate+')':'لسا ما انْدفعت']))},
- {k:'exp',n:'🧾 المصاريف',d:'نوع "مصاريف" بالدفعات',fn:B=>{const l=B.payments.filter(p=>p.cat==='مصاريف');const t=l.reduce((a,p)=>a+num(p.amount),0);
-   return hdr(B,'المصاريف')+tbl(['التاريخ','البيان','المبلغ','الدفع'],[...l.map(p=>[p.date,esc(p.desc),f(p.amount),isPaid(p)?SRC[p.paidFrom]:'لسا ما انْدفعت']),...B.exp.map(e=>[e.date,esc(e.desc)+' (قبل التحديث)',f(e.amount),'من اليومية'])],['المجموع','',f(t+B.T.exp),''])}},
  {k:'nath',n:'📝 النثريات وأسبابها',d:'كل نثرية مع السبب',fn:B=>{const l=B.payments.filter(p=>p.cat==='نثرية');return hdr(B,'النثريات وأسبابها')+tbl(['التاريخ','المبلغ','السبب','الدفع'],l.map(p=>[p.date,f(p.amount),esc(p.reason),isPaid(p)?SRC[p.paidFrom]:'لسا ما انْدفعت']),['المجموع',f(l.reduce((a,p)=>a+num(p.amount),0)),'',''])}},
  {k:'unpaid',n:'⏳ دفعات مش مدفوعة',d:'شو لسا علينا',fn:B=>{const by={};B.unpaid.forEach(p=>by[p.cat]=(by[p.cat]||0)+num(p.amount));return hdr(B,'دفعات لسا ما انْدفعت (لآخر الفترة)')+tbl(['النوع','المبلغ'],Object.entries(by).map(([c,a])=>[esc(c),f(a)]),['المجموع',f(B.T.unpaid)])+'<h3>التفاصيل</h3>'+tbl(['التاريخ','النوع','المبلغ','البيان'],B.unpaid.map(p=>[p.date,esc(p.cat),f(p.amount),esc(p.desc||p.reason)]))}},
  {k:'cash',n:'🏦 حركة الصندوق',d:'الكاش اللي دخل وطلع',fn:B=>{const rows=B.rows.filter(r=>r.has).map(r=>{const d=DB.days[r.date],ci=(d?num(d.income.cash):0)+posDay(r.date).cash,out=r.sal+r.exp+r.payDaily;return [r.label,f(ci),f(r.sal),f(r.exp+r.payDaily),'<b class="'+(ci-out>=0?'pos':'neg')+'">'+f(ci-out)+'</b>']});
@@ -692,7 +701,7 @@ $('restore').onchange=e=>{const fl=e.target.files[0];if(!fl)return;const rd=new 
     const n=window.basita.posImport(miss);if(n<0)return alert('ما قدرنا نحفظ');loadPosSales();calc();renderBuys();toast('انضافت '+n+' فاتورة من الكاشير');return}
   if(!d.days||!d.payments)throw 0;
   const ds=Object.keys(d.days),same=ds.filter(k=>DB.days[k]).length;
-  const merge=d.import||confirm('شو بدك تعمل بهاي النسخة؟\n\nموافق (OK) = ضيفها على بياناتك (الأيام والدفعات والرواتب بتنضاف، والمخزن والكاشير والأصناف بضلوا زي ما هم).\n\nإلغاء (Cancel) = استبدل كل البيانات فيها.');
+  const merge=d.import||await ask('شو بدك تعمل بهاي النسخة؟\n\n«ضيفها» = الأيام والدفعات والرواتب بتنضاف على بياناتك، والمخزن والكاشير والأصناف بضلوا زي ما هم.\n\n«استبدل الكل» = كل البيانات الحالية بتتبدّل بالنسخة.','ضيفها','استبدل الكل');if(merge===null)return;
   if(merge){ // imported days replace the same dates, payments are added once, storage/POS/password stay
     if(!await askPass('رح نضيف '+ds.length+' يوم و '+d.payments.length+' دفعة لبياناتك.'+(same?' في '+same+' يوم موجود عندك بنفس التاريخ ورح يتبدّل بالنسخة.':'')+' نكمّل؟'))return;
     ds.forEach(k=>DB.days[k]=d.days[k]);const ids=new Set(DB.payments.map(p=>p.id));d.payments.forEach(p=>{if(!ids.has(p.id))DB.payments.push(p)});
@@ -704,6 +713,17 @@ $('restore').onchange=e=>{const fl=e.target.files[0];if(!fl)return;const rd=new 
   }
   stockCfg();posCfg();
   persist();loadDay();renderPayments();toast('تمّت إضافة البيانات')}catch(x){alert('الملف مش صحيح')}finally{e.target.value=''}};rd.readAsText(fl)};
+
+// ---------- in-page message boxes ----------
+// Native alert()/confirm() in Electron on Windows can leave every text box unable to take typing until the window is re-focused,
+// so the app never uses them.
+function ask(msg,ok,no){return new Promise(res=>{const b=$('mb');$('mb-msg').textContent=msg;$('mb-ok').textContent=ok||'تمام';
+  $('mb-no').textContent=no||'إلغاء';$('mb-no').classList.toggle('hidden',no===false);b.classList.remove('hidden');setTimeout(()=>$('mb-ok').focus(),30);
+  const done=v=>{b.classList.add('hidden');$('mb-ok').onclick=$('mb-no').onclick=null;document.removeEventListener('keydown',key,true);res(v)};
+  const key=e=>{if(e.key==='Escape'){e.preventDefault();done(null)}};document.addEventListener('keydown',key,true);
+  $('mb-ok').onclick=()=>done(true);$('mb-no').onclick=()=>done(false)})}
+window.alert=msg=>{ask(String(msg),'تمام',false)};
+window.confirm=()=>{throw new Error('use ask()')};
 
 // ---------- password for every delete ----------
 const DEFAULT_ADMIN='2002';
@@ -737,18 +757,55 @@ async function zapAll(){if(!await askPass('أكيد بدك تحذف كل الب�
   backup();DB={days:{},payments:[],employees:[]};persist();loadDay();renderPayments();toast('انحذف كل شي. النسخة الاحتياطية انحفظت')}
 
 // ---------- stock (المخزن) ----------
-const DEFAULT_STOCK=['هوت دوغ','بيف برجر','بطاطا','صدر مشوي','زنجر'];
+// storage tracks meat and bread only. key = fixed role used by the automatic linking below
+const SEED_STOCK=[{key:'hd',name:'هوت دوغ',unit:'حبة'},{key:'hdb',name:'خبز هوت دوغ',unit:'رغيف'},{key:'beef',name:'شريحة لحمة',unit:'شريحة'},{key:'bun',name:'خبز برغر',unit:'رغيف'},
+  {key:'zinger',name:'زنجر',unit:'قطعة'},{key:'mighty',name:'دجاج مايتي',unit:'قطعة'},{key:'smoked',name:'صدر دجاج مدخن',unit:'قطعة'},{key:'fr',name:'خبز فرنسي',unit:'رغيف'}];
 function stockCfg(){
-  if(!DB.stock){DB.stock={items:DEFAULT_STOCK.map(n=>({id:uid(),name:n,unit:'حبة',min:10})),moves:[]};}
+  if(!DB.stock){DB.stock={items:SEED_STOCK.map(k=>({id:uid(),key:k.key,name:k.name,unit:k.unit,min:10,cost:0})),moves:[]};}
   DB.stock.items=DB.stock.items||[];DB.stock.moves=DB.stock.moves||[];return DB.stock;
 }
 // Arabic-friendly name matching: ignore ال, spaces, hamza forms, ة/ه, ى/ي, ج/غ, diacritics
 function norm(t){return String(t||'').toLowerCase().replace(/[\u064B-\u0652\u0640]/g,'').replace(/[أإآ]/g,'ا').replace(/ة/g,'ه').replace(/ى/g,'ي').replace(/ج/g,'غ').replace(/ؤ/g,'و').replace(/ئ/g,'ي')
   .split(/\s+/).map(w=>w.replace(/^ال(?=..)/,'')).join('').replace(/[^\u0600-\u06FFa-z0-9]/g,'')}
-function autoUse(name){ // which storage items a menu item uses, by name
-  const n=norm(name),hits=stockCfg().items.filter(k=>{const kn=norm(k.name);return kn.length>=2&&n.includes(kn)});
-  // drop a hit that is part of a longer hit (e.g. "برجر" inside "بيف برجر")
-  return hits.filter(h=>!hits.some(o=>o!==h&&norm(o.name).includes(norm(h.name)))).map(k=>({itemId:k.id,qty:1}));
+function autoUse(name){ // which storage items (meat + bread) a menu item uses, worked out from its name
+  const n=norm(name),has=(...w)=>w.some(x=>n.includes(norm(x))),items=stockCfg().items,K=k=>items.find(x=>x.key===k),out=[];
+  const put=(k,q)=>{const it=K(k);if(it&&q>0){const o=out.find(u=>u.itemId===it.id);if(o)o.qty+=q;else out.push({itemId:it.id,qty:q})}};
+  const box=has('بوكس'),bread=f=>{if(!box)put(f,1)};
+  if(has('كورن'))put('hd',1);                                  // corn dog: sausage only
+  else if(has('دوغ','دوق','هوتدوغ','ميني')){put('hd',1);bread('hdb')}  // hot dogs (incl. ميني بسيطة): sausage + hot dog bread (boxes: no bread)
+  if(has('زنجر')){put('zinger',1);bread(has('فرنسي')?'fr':'bun')}
+  if(has('مايتي')){put('mighty',1);bread('bun')}
+  if(has('مدخن')){put('smoked',1);bread('bun')}
+  if(has('برغر','برجر','لحم')&&!has('زنجر','مايتي','مدخن','دغاغ','دجاج')){
+    const q=has('تربيل')?3:has('دبل','شريحتين')?2:1;put('beef',q);
+    if(!has('شريحه','شريحتين','اضافي'))bread('bun')}             // extra patties: meat only
+  // storage items the admin added themselves: match by name
+  for(const k of items)if(!k.key){const kn=norm(k.name);if(kn.length>=2&&n.includes(kn)&&!out.some(u=>u.itemId===k.id))out.push({itemId:k.id,qty:1})}
+  return out;
+}
+// the full Basita menu (prices from the printed menu). price 0 = hidden from the cashier until the admin sets a price
+const SEED_MENU=[
+ ['هوت دوغ','بسيطة سبيشل دوق ساندويش',1.99],['هوت دوغ','بسيطة سبيشل دوق وجبة',2.75],['هوت دوغ','كلاسيك دوق ساندويش',1.75],['هوت دوغ','كلاسيك دوق وجبة',2.5],
+ ['هوت دوغ','ميني بسيطة',0.99],['هوت دوغ','كورن دوق',0.99],['هوت دوغ','عرض هوت دوق',3.75],
+ ['برغر لحمة','كلاسيك برغر ساندويش',1.99],['برغر لحمة','كلاسيك برغر وجبة',1.99],['برغر لحمة','سموكي برغر ساندويش',2.25],['برغر لحمة','سموكي برغر وجبة',1.99],
+ ['برغر لحمة','شريحتين لحمة (إضافة)',1.5],['برغر لحمة','شريحة لحمة إضافية',1],['برغر لحمة','دبل لحم',0],['برغر لحمة','تربيل لحم',0],['برغر لحمة','عرض 5',0],
+ ['كرسبي برغر','مايتي دايناميت ساندويش',1.9],['كرسبي برغر','مايتي رانش ساندويش',1.9],['كرسبي برغر','مايتي دايناميت وجبة',2.7],['كرسبي برغر','مايتي رانش وجبة',2.7],
+ ['كرسبي برغر','صدر دجاج مدخن ساندويش',1.9],['كرسبي برغر','صدر دجاج مدخن وجبة',2.75],['كرسبي برغر','زنجر ساندويش',1.65],['كرسبي برغر','زنجر وجبة',2.5],
+ ['زنجر فرنسي','زنجر فرنسي عادي ساندويش',0],['زنجر فرنسي','زنجر فرنسي عادي وجبة',0],['زنجر فرنسي','زنجر فرنسي حار ساندويش',0],['زنجر فرنسي','زنجر فرنسي حار وجبة',0],
+ ['بوكسات وجوانب','بوكس الزنجر',2.5],['بوكسات وجوانب','بوكس الهوت دوق',2.5],['بوكسات وجوانب','حلقات البصل (4 قطع)',0.5],['بوكسات وجوانب','بطاطا بلجيكية',0.5],
+ ['بوكسات وجوانب','صوص جبنة',0],['بوكسات وجوانب','ماش بوتيتو',0],
+ ['صوصات','علبة صوص سموكي',0.25],['صوصات','علبة صوص باربيكيو',0.25],['صوصات','علبة صوص رانش',0.25],['صوصات','علبة صوص دايناميت',0.25],['صوصات','علبة صوص كوكتيل',0.25],
+ ['مشروبات','كينزا',0.3],['مشروبات','موهيتو',0.75],['مشروبات','ماء',0.25]];
+function seedV2(){ // one-time upgrade: meat + bread storage, full menu
+  if(DB.seedV>=2)return;const st=stockCfg(),c=posCfg();
+  const ren={'هوت دوغ':'hd','بيف برجر':'beef','زنجر':'zinger','صدر مشوي':'smoked'};
+  st.items.forEach(k=>{if(!k.key&&ren[k.name]){k.key=ren[k.name];const sd=SEED_STOCK.find(x=>x.key===k.key);k.name=sd.name;k.unit=sd.unit}});
+  const inUse=id=>st.moves.some(m=>m.itemId===id)||POS_SALES.some(x=>(x.use||[]).some(u=>u.itemId===id));
+  st.items=st.items.filter(k=>!(k.name==='بطاطا'&&!k.key&&!inUse(k.id)));     // not meat or bread
+  SEED_STOCK.forEach(sd=>{if(!st.items.some(k=>k.key===sd.key))st.items.push({id:uid(),key:sd.key,name:sd.name,unit:sd.unit,min:10,cost:0})});
+  c.menu.forEach(m=>m.use=autoUse(m.name));                                   // re-link existing items with the new rules
+  SEED_MENU.forEach(([cat,name,price])=>{if(!c.menu.some(m=>norm(m.name)===norm(name)))c.menu.push({id:uid(),cat,name,price,use:autoUse(name)})});
+  DB.seedV=2;persist();
 }
 function autoLinkAll(force){const c=posCfg();let n=0;c.menu.forEach(m=>{if(force||!m.use){m.use=autoUse(m.name);n++}});persist();renderStock();if(force)toast('انربطت '+n+' أصناف')}
 function used(itemId,upto,from){let q=0;for(const s of POS_SALES){if(s.voided||(upto&&s.date>upto)||(from&&s.date<from))continue;for(const u of s.use||[])if(u.itemId===itemId)q+=num(u.qty)}return q}
@@ -851,7 +908,7 @@ function renderPos(){
   $('u-table').innerHTML=c.users.length?'<thead><tr><th>الاسم</th><th>الرقم السري</th><th>الحالة</th><th></th></tr></thead><tbody>'+c.users.map(u=>`<tr><td>${esc(u.name)}</td><td style="direction:ltr;text-align:right">${'•'.repeat(u.pin.length)}</td><td><button class="btn small ${u.active===false?'':'ghost'}" onclick="toggleUser('${u.id}')">${u.active===false?'موقوف · فعّل':'شغّال · أوقف'}</button></td><td><button class="btn del" onclick="delUser('${u.id}')">✕</button></td></tr>`).join('')+'</tbody>':'<tr><td class="hint">ما في كاشيرية. زيد أول واحد.</td></tr>';
   $('m-cats').innerHTML=[...new Set(c.menu.map(m=>m.cat))].map(x=>`<option value="${esc(x)}">`).join('');
   const menu=[...c.menu].sort((a,b)=>a.cat.localeCompare(b.cat,'ar'));
-  $('m-table').innerHTML=menu.length?'<thead><tr><th>القسم</th><th>الصنف</th><th>السعر</th><th></th></tr></thead><tbody>'+menu.map(m=>`<tr><td>${esc(m.cat)}</td><td>${esc(m.name)}</td><td><input type="number" step="0.001" min="0" value="${m.price}" style="width:110px" onchange="setPrice('${m.id}',this.value)"></td><td><button class="btn del" onclick="delItem('${m.id}')">✕</button></td></tr>`).join('')+'</tbody>':'<tr><td class="hint">ما في أصناف. زيد أول صنف.</td></tr>';
+  $('m-table').innerHTML=menu.length?'<thead><tr><th>القسم</th><th>الصنف</th><th>السعر</th><th></th></tr></thead><tbody>'+menu.map(m=>`<tr><td>${esc(m.cat)}</td><td>${esc(m.name)}</td><td><input type="number" step="0.001" min="0" value="${m.price||''}" placeholder="السعر" style="width:110px" onchange="setPrice('${m.id}',this.value)">${num(m.price)>0?'':'<div class="req" style="font-size:12px">مخفي عن الكاشير لحد ما تحط سعر</div>'}</td><td><button class="btn del" onclick="delItem('${m.id}')">✕</button></td></tr>`).join('')+'</tbody>':'<tr><td class="hint">ما في أصناف. زيد أول صنف.</td></tr>';
   const d=$('s-date').value||today(),list=POS_SALES.filter(x=>x.date===d).sort((a,b)=>b.no-a.no),pd=posDay(d);
   $('s-table').innerHTML=list.length?'<thead><tr><th>#</th><th>الوقت</th><th>الكاشير</th><th>الأصناف</th><th>الدفع</th><th>المبلغ</th><th></th></tr></thead><tbody>'+list.map(x=>`<tr style="${x.voided?'opacity:.45;text-decoration:line-through':''}"><td>${x.no}</td><td>${x.time}</td><td>${esc(x.cashier||'')}</td><td>${x.items.map(i=>esc(i.name)+(i.qty>1?' ×'+i.qty:'')).join('، ')}</td><td>${x.method==='cash'?'كاش':'فيزا'}</td><td>${f(x.total)}</td><td>${x.voided?`<button class="btn ghost small" onclick="voidSale('${x.id}',false)">رجّعها</button>`:`<button class="btn del small" onclick="voidSale('${x.id}',true)">ألغِ</button>`}</td></tr>`).join('')+`</tbody><tfoot><tr><td colspan="5">المجموع (${pd.count} فاتورة · كاش ${f(pd.cash)} · فيزا ${f(pd.card)})</td><td colspan="2">${f(pd.total)}</td></tr></tfoot>`:'<tr><td class="hint">ما في فواتير بهاد اليوم.</td></tr>';
 }
@@ -862,7 +919,7 @@ if(HASPOS)window.basita.onPos(()=>{loadPosSales();calc();renderBuys();if(!$('tab
 // ---------- init ----------
 $('d-date').value=today();$('p-date').value=today();$('p-month').value=today().slice(0,7);
 $('rp-date').value=today();$('rp-month').value=today().slice(0,7);$('z-day').value=today();$('z-month').value=today().slice(0,7);
-setCat(CATS[0]);setSrc('');$('p-paydate').value=today();$('s-date').value=today();posCfg();stockCfg();autoLinkAll(false);loadDay();lock();
+setCat(BASE_CATS[0]);setSrc('');$('p-paydate').value=today();$('s-date').value=today();posCfg();stockCfg();seedV2();autoLinkAll(false);loadDay();lock();
 </script>
 </body>
 </html>

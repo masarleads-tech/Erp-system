@@ -21,7 +21,8 @@ module.exports=function(app,ipcMain,getWin){
   const page=fs.readFileSync(path.join(__dirname,'pos.html'));
   const send=(res,code,obj)=>{res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(obj))};
   function mk(c,s,name,at){ // build a sale record (also used when importing a cashier-device backup)
-        const items=s.items.map(i=>({id:String(i.id||'').slice(0,40),name:String(i.name).slice(0,80),price:Math.max(0,+i.price||0),qty:Math.max(1,Math.round(+i.qty||1))}));
+        const items=s.items.map(i=>{const m=(c.menu||[]).find(x=>x.id===i.id);  // live sales: the price comes from the ERP menu, not from the tablet; imported backups keep the price that was charged
+          return {id:String(i.id||'').slice(0,40),name:String(m?m.name:i.name).slice(0,80),price:Math.max(0,!at&&m&&+m.price>0?+m.price:(+i.price||0)),qty:Math.max(1,Math.round(+i.qty||1))}});
         // what this sale takes out of storage, from the menu links at the time of sale
         const kc=id=>{const k=c.stock.find(x=>x.id===id);return k?Math.max(0,+k.cost||0):0};
         const use={};for(const i of items){const m=(c.menu||[]).find(x=>x.id===i.id)||(c.menu||[]).find(x=>x.name===i.name);let uc=0;
@@ -37,7 +38,7 @@ module.exports=function(app,ipcMain,getWin){
     const c=cfg();
     if(u.pathname==='/api/menu'){ // also used as cashier login
       const w=who(c,u.searchParams.get('pin'));if(!w)return send(res,403,{error:'pin'});
-      return send(res,200,{menu:c.menu||[],cashier:w.name});
+      return send(res,200,{menu:(c.menu||[]).filter(m=>+m.price>0).map(m=>({id:m.id,cat:m.cat,name:m.name,price:+m.price})),cashier:w.name}); // no costs/links to the tablet; unpriced items hidden
     }
     if(u.pathname==='/api/sale'&&req.method==='POST'){
       let body='';req.on('data',d=>{body+=d;if(body.length>200000)req.destroy()});
