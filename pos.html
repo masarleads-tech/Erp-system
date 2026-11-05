@@ -58,6 +58,7 @@ button{font:inherit;cursor:pointer}
   <button class="hbtn hidden" id="bk" title="نزّل نسخة احتياطية على هاد الجهاز">💾 نسخة</button>
   <button class="hbtn hidden" id="out">خروج</button>
 </header>
+<div id="prbar" class="hidden" style="background:#c0392b;color:#fff;padding:10px 16px;font-weight:800;text-align:center;font-size:18px"></div>
 <div id="bkask" class="hidden" style="background:#fff7e6;border-bottom:2px solid #e8b04a;padding:12px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
   <b style="flex:1 1 260px">💾 خلّينا نحفظ نسخة من فواتير هاد الجهاز عليه، عشان إذا انقطع الواي فاي ما يضيع إشي. إذا المتصفح سألك "السماح بالتنزيل" اكبس سماح (Allow).</b>
   <button class="hbtn" id="bkyes" style="background:#2f7d4f;color:#fff">اسمح بالتنزيل</button><button class="hbtn" id="bkno" style="background:#ddd;color:#333">مش هلأ</button>
@@ -106,7 +107,8 @@ async function login(){
     const d=await r.json();pin=p;sessionStorage.setItem('basita_pin',p);start(d)}
   catch(e){$('lerr').textContent='مش متصل بجهاز الحسابات. تأكد إنك على نفس الواي فاي.'}
 }
-function start(d){menu=d.menu||[];LS.set('basita_pos_menu',menu);if(d.cashier){cashierName=d.cashier;LS.set('basita_pos_cashier',cashierName)}$('who').textContent='👤 '+(cashierName||'');askBackup();
+function showPr(p){const b=$('prbar');if(!p||p.state!=='down'){b.classList.add('hidden');return}b.textContent='🖨️ الطابعة مش شغّالة، الفواتير بتنحفظ بس ما بتنطبع. اتصل بيامن'+(p.phone?' على '+p.phone:'');b.classList.remove('hidden')}
+function start(d){showPr(d.printer);menu=d.menu||[];LS.set('basita_pos_menu',menu);if(d.cashier){cashierName=d.cashier;LS.set('basita_pos_cashier',cashierName)}$('who').textContent='👤 '+(cashierName||'');askBackup();
   $('loginv').classList.add('hidden');$('posv').classList.remove('hidden');$('out').classList.remove('hidden');renderMenu();renderCart()}
 $('out').onclick=()=>{if(cart.length&&!confirm('في فاتورة مش مدفوعة. بدك تطلع؟'))return;sessionStorage.removeItem('basita_pin');location.reload()};
 
@@ -168,7 +170,7 @@ async function flush(){
 function setNet(v){online=v;$('net').textContent=v?'متصل ✓':'مش متصل';$('net').className='st'+(v?'':' off')}
 function showQueue(){const q=$('queue');q.classList.toggle('hidden',!queue.length);q.textContent=queue.length+' فاتورة بتستنى الإرسال'}
 async function ping(){try{const r=await fetch('/api/menu?pin='+encodeURIComponent(pin),{cache:'no-store'});setNet(true);
-  if(r.ok){const d=await r.json();if(JSON.stringify(d.menu)!==JSON.stringify(menu)){menu=d.menu;LS.set('basita_pos_menu',menu);renderMenu()}}}catch(e){setNet(false)}}
+  if(r.ok){const d=await r.json();showPr(d.printer);if(JSON.stringify(d.menu)!==JSON.stringify(menu)){menu=d.menu;LS.set('basita_pos_menu',menu);renderMenu()}}}catch(e){setNet(false)}}
 setInterval(()=>{flush();if(pin)ping()},5000);
 showQueue();
 if(pin){fetch('/api/menu?pin='+encodeURIComponent(pin),{cache:'no-store'}).then(r=>r.ok?r.json():Promise.reject(r.status)).then(start).catch(s=>{if(s===403){sessionStorage.removeItem('basita_pin');pin=''}else if(menu.length)start({menu,cashier:''});setNet(false)})}

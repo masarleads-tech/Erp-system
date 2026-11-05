@@ -274,6 +274,21 @@ tfoot td{font-weight:800;background:var(--soft)}
     <h2>🖥️ الكاشير على الواي فاي</h2>
     <div id="pos-addr"></div>
   </div>
+  <div class="card">
+    <h2>🧾 طابعة الفواتير</h2>
+    <p class="hint">طابعة حرارية (58 أو 80 ملم) موصولة على هاد الكمبيوتر ومعرّفة على الويندوز. كل ما الكاشير يكبس كاش أو فيزا بتطلع الفاتورة لحالها.</p>
+    <div class="row" style="align-items:end">
+      <div><label for="pr-name">الطابعة</label><select id="pr-name"></select></div>
+      <div style="flex:0 0 130px"><label for="pr-width">عرض الورق</label><select id="pr-width"><option value="80">80 ملم</option><option value="58">58 ملم</option></select></div>
+      <div><label for="pr-phone">رقم يامن (للمساعدة)</label><input id="pr-phone" type="tel" placeholder="07xxxxxxxx" style="direction:ltr;text-align:right"></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center">
+      <button class="btn" id="pr-toggle"></button>
+      <button class="btn ghost" id="pr-test">اطبع فاتورة تجربة</button>
+      <button class="btn ghost small" id="pr-refresh">حدّث قائمة الطابعات</button>
+      <span id="pr-state" class="chip" style="cursor:default"></span>
+    </div>
+  </div>
   <div class="dgrid">
     <div class="card">
       <h2>👤 الكاشيرية</h2>
@@ -349,7 +364,7 @@ tfoot td{font-weight:800;background:var(--soft)}
     <button class="btn" style="width:100%;margin-top:12px" id="lock-ok">ادخل</button>
   </div>
 </div>
-<div id="mb" class="pw hidden" role="dialog" aria-modal="true" aria-labelledby="mb-msg">
+<div id="mb" class="pw hidden" style="z-index:40" role="dialog" aria-modal="true" aria-labelledby="mb-msg">
   <div class="pwbox">
     <p id="mb-msg" style="white-space:pre-line;font-size:17px"></p>
     <div class="nav2"><button class="btn ghost" id="mb-no">إلغاء</button><button class="btn" id="mb-ok">تمام</button></div>
@@ -787,7 +802,7 @@ function autoUse(name){ // which storage items (meat + bread) a menu item uses, 
 const SEED_MENU=[
  ['هوت دوغ','بسيطة سبيشل دوق ساندويش',1.99],['هوت دوغ','بسيطة سبيشل دوق وجبة',2.75],['هوت دوغ','كلاسيك دوق ساندويش',1.75],['هوت دوغ','كلاسيك دوق وجبة',2.5],
  ['هوت دوغ','ميني بسيطة',0.99],['هوت دوغ','كورن دوق',0.99],['هوت دوغ','عرض هوت دوق',3.75],
- ['برغر لحمة','كلاسيك برغر ساندويش',1.99],['برغر لحمة','كلاسيك برغر وجبة',1.99],['برغر لحمة','سموكي برغر ساندويش',2.25],['برغر لحمة','سموكي برغر وجبة',1.99],
+ ['برغر لحمة','كلاسيك برغر ساندويش',1.99],['برغر لحمة','كلاسيك برغر وجبة',2.75],['برغر لحمة','سموكي برغر ساندويش',2.25],['برغر لحمة','سموكي برغر وجبة',3],
  ['برغر لحمة','شريحتين لحمة (إضافة)',1.5],['برغر لحمة','شريحة لحمة إضافية',1],['برغر لحمة','دبل لحم',0],['برغر لحمة','تربيل لحم',0],['برغر لحمة','عرض 5',0],
  ['كرسبي برغر','مايتي دايناميت ساندويش',1.9],['كرسبي برغر','مايتي رانش ساندويش',1.9],['كرسبي برغر','مايتي دايناميت وجبة',2.7],['كرسبي برغر','مايتي رانش وجبة',2.7],
  ['كرسبي برغر','صدر دجاج مدخن ساندويش',1.9],['كرسبي برغر','صدر دجاج مدخن وجبة',2.75],['كرسبي برغر','زنجر ساندويش',1.65],['كرسبي برغر','زنجر وجبة',2.5],
@@ -806,6 +821,10 @@ function seedV2(){ // one-time upgrade: meat + bread storage, full menu
   c.menu.forEach(m=>m.use=autoUse(m.name));                                   // re-link existing items with the new rules
   SEED_MENU.forEach(([cat,name,price])=>{if(!c.menu.some(m=>norm(m.name)===norm(name)))c.menu.push({id:uid(),cat,name,price,use:autoUse(name)})});
   DB.seedV=2;persist();
+}
+function seedV3(){ // corrected beef meal prices from the fixed menu (only if the admin hasn't changed them)
+  if(DB.seedV>=3)return;const fix={'كلاسيك برغر وجبة':2.75,'سموكي برغر وجبة':3};
+  posCfg().menu.forEach(m=>{if(fix[m.name]&&Math.abs(num(m.price)-1.99)<1e-9)m.price=fix[m.name]});DB.seedV=3;persist();
 }
 function autoLinkAll(force){const c=posCfg();let n=0;c.menu.forEach(m=>{if(force||!m.use){m.use=autoUse(m.name);n++}});persist();renderStock();if(force)toast('انربطت '+n+' أصناف')}
 function used(itemId,upto,from){let q=0;for(const s of POS_SALES){if(s.voided||(upto&&s.date>upto)||(from&&s.date<from))continue;for(const u of s.use||[])if(u.itemId===itemId)q+=num(u.qty)}return q}
@@ -910,16 +929,39 @@ function renderPos(){
   const menu=[...c.menu].sort((a,b)=>a.cat.localeCompare(b.cat,'ar'));
   $('m-table').innerHTML=menu.length?'<thead><tr><th>القسم</th><th>الصنف</th><th>السعر</th><th></th></tr></thead><tbody>'+menu.map(m=>`<tr><td>${esc(m.cat)}</td><td>${esc(m.name)}</td><td><input type="number" step="0.001" min="0" value="${m.price||''}" placeholder="السعر" style="width:110px" onchange="setPrice('${m.id}',this.value)">${num(m.price)>0?'':'<div class="req" style="font-size:12px">مخفي عن الكاشير لحد ما تحط سعر</div>'}</td><td><button class="btn del" onclick="delItem('${m.id}')">✕</button></td></tr>`).join('')+'</tbody>':'<tr><td class="hint">ما في أصناف. زيد أول صنف.</td></tr>';
   const d=$('s-date').value||today(),list=POS_SALES.filter(x=>x.date===d).sort((a,b)=>b.no-a.no),pd=posDay(d);
-  $('s-table').innerHTML=list.length?'<thead><tr><th>#</th><th>الوقت</th><th>الكاشير</th><th>الأصناف</th><th>الدفع</th><th>المبلغ</th><th></th></tr></thead><tbody>'+list.map(x=>`<tr style="${x.voided?'opacity:.45;text-decoration:line-through':''}"><td>${x.no}</td><td>${x.time}</td><td>${esc(x.cashier||'')}</td><td>${x.items.map(i=>esc(i.name)+(i.qty>1?' ×'+i.qty:'')).join('، ')}</td><td>${x.method==='cash'?'كاش':'فيزا'}</td><td>${f(x.total)}</td><td>${x.voided?`<button class="btn ghost small" onclick="voidSale('${x.id}',false)">رجّعها</button>`:`<button class="btn del small" onclick="voidSale('${x.id}',true)">ألغِ</button>`}</td></tr>`).join('')+`</tbody><tfoot><tr><td colspan="5">المجموع (${pd.count} فاتورة · كاش ${f(pd.cash)} · فيزا ${f(pd.card)})</td><td colspan="2">${f(pd.total)}</td></tr></tfoot>`:'<tr><td class="hint">ما في فواتير بهاد اليوم.</td></tr>';
+  $('s-table').innerHTML=list.length?'<thead><tr><th>#</th><th>الوقت</th><th>الكاشير</th><th>الأصناف</th><th>الدفع</th><th>المبلغ</th><th></th></tr></thead><tbody>'+list.map(x=>`<tr style="${x.voided?'opacity:.45;text-decoration:line-through':''}"><td>${x.no}</td><td>${x.time}</td><td>${esc(x.cashier||'')}</td><td>${x.items.map(i=>esc(i.name)+(i.qty>1?' ×'+i.qty:'')).join('، ')}</td><td>${x.method==='cash'?'كاش':'فيزا'}</td><td>${f(x.total)}</td><td style="white-space:nowrap">${x.voided?'':`<button class="btn ghost small" title="اطبع الفاتورة مرة ثانية" onclick="reprint('${x.id}')">🖨️</button> `}${x.voided?`<button class="btn ghost small" onclick="voidSale('${x.id}',false)">رجّعها</button>`:`<button class="btn del small" onclick="voidSale('${x.id}',true)">ألغِ</button>`}</td></tr>`).join('')+`</tbody><tfoot><tr><td colspan="5">المجموع (${pd.count} فاتورة · كاش ${f(pd.cash)} · فيزا ${f(pd.card)})</td><td colspan="2">${f(pd.total)}</td></tr></tfoot>`:'<tr><td class="hint">ما في فواتير بهاد اليوم.</td></tr>';
 }
 $('s-date').onchange=renderPos;
+// ---------- receipt printer ----------
+function prCfg(){DB.printer=Object.assign({on:false,name:'',width:80,phone:''},DB.printer||{});return DB.printer}
+const PR_TXT={off:['الطباعة طافية','background:#eee;color:#555'],ok:['✓ الطابعة شغّالة','background:var(--goodsoft);color:var(--good)'],retry:['… بنحاول نوصل الطابعة','background:#fff3d6;color:#8a5a00'],down:['✕ الطابعة مش شغّالة','background:var(--badsoft);color:var(--bad)']};
+let prShown=false;
+function showPrState(st){if(!HASPOS)return;const t=PR_TXT[st.state]||PR_TXT.off;$('pr-state').textContent=t[0]+(st.msg&&st.state!=='ok'?' · '+st.msg:'');$('pr-state').style.cssText='cursor:default;'+t[1];
+  $('pr-toggle').textContent=prCfg().on?'افصل الطابعة':'وصّل الطابعة';$('pr-toggle').className='btn'+(prCfg().on?' ghost':'');
+  if(st.state==='down'&&prCfg().on&&!prShown){prShown=true;const ph=prCfg().phone;
+    ask('🖨️ الطابعة مش راضية توصل لحالها.\n'+(st.msg?st.msg+'\n':'')+'\nاتصل بيامن'+(ph?' على '+ph:'')+'.\n\nالفواتير بتنحفظ عادي، وبتقدر تطبعها بعدين من قائمة الفواتير (🖨️).','تمام',false).then(()=>{})}
+  if(st.state==='ok')prShown=false}
+async function loadPrinters(){if(!HASPOS||!window.basita.printers)return;const c=prCfg(),l=await window.basita.printers();
+  $('pr-name').innerHTML='<option value="">— اختار الطابعة —</option>'+l.map(p=>`<option value="${esc(p.name)}" ${p.name===c.name?'selected':''}>${esc(p.display)}${p.isDefault?' (الافتراضية)':''}</option>`).join('')+(c.name&&!l.some(p=>p.name===c.name)?`<option value="${esc(c.name)}" selected>${esc(c.name)} (مش موصولة)</option>`:'');
+  $('pr-width').value=String(c.width);$('pr-phone').value=c.phone||'';showPrState(window.basita.printerState())}
+if(HASPOS&&window.basita.printers){
+  $('pr-name').onchange=async()=>{prCfg().name=$('pr-name').value;persist();showPrState(await window.basita.printerApply())};
+  $('pr-width').onchange=()=>{prCfg().width=+$('pr-width').value;persist()};
+  $('pr-phone').onchange=()=>{prCfg().phone=$('pr-phone').value.trim();persist();toast('انحفظ الرقم')};
+  $('pr-toggle').onclick=async()=>{const c=prCfg();if(!c.on&&!c.name)return alert('اختار الطابعة أول');c.on=!c.on;persist();prShown=false;showPrState(await window.basita.printerApply());toast(c.on?'انوصلت الطابعة':'انفصلت الطابعة')};
+  $('pr-test').onclick=async()=>{if(!prCfg().name)return alert('اختار الطابعة أول');const r=await window.basita.printerTest();if(r.ok)toast('✓ انبعتت فاتورة التجربة');else alert('ما زبطت الطباعة: '+(r.reason||''))};
+  $('pr-refresh').onclick=loadPrinters;
+  window.basita.onPrinter(showPrState);loadPrinters();
+} else {const pc=$('pr-name').closest('.card');if(pc)pc.classList.add('hidden')}
+async function reprint(id){const r=await window.basita.reprint(id);if(r&&r.ok)toast('🖨️ انطبعت');else alert('ما انطبعت: '+((r&&r.reason)||''))}
+
 loadPosSales();
 if(HASPOS)window.basita.onPos(()=>{loadPosSales();calc();renderBuys();if(!$('tab-stock').classList.contains('hidden'))renderStock();if(!$('tab-pos').classList.contains('hidden'))renderPos()});
 
 // ---------- init ----------
 $('d-date').value=today();$('p-date').value=today();$('p-month').value=today().slice(0,7);
 $('rp-date').value=today();$('rp-month').value=today().slice(0,7);$('z-day').value=today();$('z-month').value=today().slice(0,7);
-setCat(BASE_CATS[0]);setSrc('');$('p-paydate').value=today();$('s-date').value=today();posCfg();stockCfg();seedV2();autoLinkAll(false);loadDay();lock();
+setCat(BASE_CATS[0]);setSrc('');$('p-paydate').value=today();$('s-date').value=today();posCfg();stockCfg();seedV2();seedV3();autoLinkAll(false);loadDay();lock();
 </script>
 </body>
 </html>

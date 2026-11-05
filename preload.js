@@ -7,5 +7,11 @@ contextBridge.exposeInMainWorld('basita',{
   posSales:()=>ipcRenderer.sendSync('pos-sales'),
   posImport:list=>ipcRenderer.sendSync('pos-import',list),
   posVoid:(id,v)=>ipcRenderer.sendSync('pos-void',id,v),
+  printers:()=>ipcRenderer.invoke('printer-list'),
+  printerTest:()=>ipcRenderer.invoke('printer-test'),
+  printerApply:()=>ipcRenderer.invoke('printer-apply'),
+  printerState:()=>ipcRenderer.sendSync('printer-state'),
+  reprint:id=>ipcRenderer.invoke('pos-reprint',id),
+  onPrinter:cb=>ipcRenderer.on('printer-status',(e,st)=>cb(st)),
   onPos:cb=>ipcRenderer.on('pos-changed',()=>cb())
 });

@@ -20,6 +20,7 @@
       "index.html",
       "main.js",
       "preload.js",
+      "printer.js",
       "data.js",
       "pos-server.js",
       "pos.html"
