@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('basita',{
   save:json=>ipcRenderer.sendSync('data-save',json),
   posInfo:()=>ipcRenderer.sendSync('pos-info'),
   posSales:()=>ipcRenderer.sendSync('pos-sales'),
+  posImport:list=>ipcRenderer.sendSync('pos-import',list),
   posVoid:(id,v)=>ipcRenderer.sendSync('pos-void',id,v),
   onPos:cb=>ipcRenderer.on('pos-changed',()=>cb())
 });

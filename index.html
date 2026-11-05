@@ -162,8 +162,9 @@ tfoot td{font-weight:800;background:var(--soft)}
 
     <div class="card dcard">
       <h2>📦 مشتريات اليوم</h2>
-      <p class="hint">شو دخل على المخزن اليوم؟ اكبس +5 أو +10… بنضاف للمخزن لحاله. (المصاريف صارت بالدفعات، نوع "مصاريف".)</p>
+      <p class="hint">شو دخل على المخزن اليوم؟ اكبس +5 أو +10… أو اكتب الكمية. بنضاف للمخزن، والمبلغ (الكمية × تكلفة الحبة من المخزن) بنسجّل لحاله بالدفعات كـ "مشتريات المخزن".</p>
       <div id="buy-list"></div>
+      <div class="total"><span>مجموع مشتريات اليوم</span><span id="buy-total">0.000</span></div>
       <div id="old-exp" class="total hidden"><span>مصاريف مسجّلة قبل التحديث</span><span id="exp-total">0.000</span></div>
     </div>
 
@@ -361,7 +362,7 @@ tfoot td{font-weight:800;background:var(--soft)}
 <script>
 // ---------- storage ----------
 const KEY='basita_erp_v1';
-const CATS=['مشتريات وادي الرمم','كنزا','نثرية','المجمدات','الخبز','مصاريف'];
+const CATS=['مشتريات وادي الرمم','كنزا','نثرية','المجمدات','الخبز','مصاريف','مشتريات المخزن'];
 let DB;
 const DESK=window.basita&&window.basita.load; // desktop app: data lives in a file on disk
 try{if(DESK)DB=window.basita.load()}catch(e){}
@@ -682,14 +683,26 @@ $('rp-date').onchange=showReport;$('rp-month').onchange=showReport;
 
 // ---------- backup ----------
 function backup(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(DB,null,1)],{type:'application/json'}));a.download='بسيطة-نسخة-احتياطية-'+today()+'.json';a.click()}
-$('restore').onchange=e=>{const fl=e.target.files[0];if(!fl)return;const rd=new FileReader();rd.onload=async()=>{try{const d=JSON.parse(rd.result);if(!d.days||!d.payments)throw 0;
-  if(d.import){ // merge: imported days replace the same dates, payments are added once
-    const ds=Object.keys(d.days);if(!await askPass('رح نضيف '+ds.length+' يوم و '+d.payments.length+' دفعة لبياناتك. الأيام اللي إلها نفس التاريخ رح تتبدّل. نكمّل؟'))return;
+$('restore').onchange=e=>{const fl=e.target.files[0];if(!fl)return;const rd=new FileReader();rd.onload=async()=>{try{const d=JSON.parse(rd.result);
+  if(d.basitaPos){ // a backup file from a cashier device: add the sales that never reached this PC
+    if(!HASPOS)return alert('نسخة الكاشير بتنضاف بس من برنامج بسيطة على الكمبيوتر');
+    const miss=(d.sales||[]).filter(x=>!POS_SALES.some(y=>y.id===x.id));
+    if(!miss.length)return alert('كل فواتير هاي النسخة موجودة أصلاً ✓');
+    if(!await askPass('بهاي النسخة '+miss.length+' فاتورة مش موجودة عندك. نضيفها؟'))return;
+    const n=window.basita.posImport(miss);if(n<0)return alert('ما قدرنا نحفظ');loadPosSales();calc();renderBuys();toast('انضافت '+n+' فاتورة من الكاشير');return}
+  if(!d.days||!d.payments)throw 0;
+  const ds=Object.keys(d.days),same=ds.filter(k=>DB.days[k]).length;
+  const merge=d.import||confirm('شو بدك تعمل بهاي النسخة؟\n\nموافق (OK) = ضيفها على بياناتك (الأيام والدفعات والرواتب بتنضاف، والمخزن والكاشير والأصناف بضلوا زي ما هم).\n\nإلغاء (Cancel) = استبدل كل البيانات فيها.');
+  if(merge){ // imported days replace the same dates, payments are added once, storage/POS/password stay
+    if(!await askPass('رح نضيف '+ds.length+' يوم و '+d.payments.length+' دفعة لبياناتك.'+(same?' في '+same+' يوم موجود عندك بنفس التاريخ ورح يتبدّل بالنسخة.':'')+' نكمّل؟'))return;
     ds.forEach(k=>DB.days[k]=d.days[k]);const ids=new Set(DB.payments.map(p=>p.id));d.payments.forEach(p=>{if(!ids.has(p.id))DB.payments.push(p)});
-    (d.employees||[]).forEach(n=>{if(!DB.employees.includes(n))DB.employees.push(n)});
+    DB.employees=DB.employees||[];(d.employees||[]).forEach(n=>{if(!DB.employees.includes(n))DB.employees.push(n)});
+    if(d.pos&&(!DB.pos||!(DB.pos.menu||[]).length&&!(DB.pos.users||[]).length))DB.pos=d.pos; // only if this PC has no POS setup yet
+    if(d.stock&&(!DB.stock||!DB.stock.moves.length))DB.stock=d.stock;
   } else {
-    if(!await askPass('هاد رح يستبدل كل البيانات الحالية بالنسخة الاحتياطية. متأكد؟'))return;DB=d;DB.employees=DB.employees||[];
+    if(!await askPass('هاد رح يستبدل كل البيانات الحالية بالنسخة الاحتياطية. متأكد؟'))return;const adm=DB.admin;DB=d;DB.employees=DB.employees||[];if(!DB.admin)DB.admin=adm;
   }
+  stockCfg();posCfg();
   persist();loadDay();renderPayments();toast('تمّت إضافة البيانات')}catch(x){alert('الملف مش صحيح')}finally{e.target.value=''}};rd.readAsText(fl)};
 
 // ---------- password for every delete ----------
@@ -742,15 +755,25 @@ function used(itemId,upto,from){let q=0;for(const s of POS_SALES){if(s.voided||(
 function moved(itemId,upto,from,type){let q=0;for(const m of stockCfg().moves){if(m.itemId!==itemId||(upto&&m.date>upto)||(from&&m.date<from)||(type&&m.type!==type))continue;q+=num(m.qty)}return q}
 const stockLevel=id=>moved(id)-used(id);
 function boughtOn(id,date){return moved(id,date,date,'buy')}
-function addBuy(id,q){const c=stockCfg();c.moves.push({id:uid(),date:curDay,itemId:id,qty:q,type:'buy'});persist();renderBuys();toast('+'+q+' '+c.items.find(k=>k.id===id).name)}
+// each purchase also goes to الدفعات: one "مشتريات المخزن" payment per item per day, amount = qty × the item's cost
+function buyPay(id){const k=stockCfg().items.find(x=>x.id===id),mv=stockCfg().moves.filter(m=>m.itemId===id&&m.date===curDay&&m.type==='buy');
+  const q=mv.reduce((a,m)=>a+num(m.qty),0),amt=Math.round(mv.reduce((a,m)=>a+num(m.qty)*num(m.cost),0)*1000)/1000;
+  let p=DB.payments.find(x=>x.stockItem===id&&x.date===curDay);
+  if(!amt){if(p)DB.payments=DB.payments.filter(x=>x!==p);return}
+  if(!p){p={id:Date.now()+''+Math.random().toString(36).slice(2,6),date:curDay,cat:'مشتريات المخزن',stockItem:id,reason:'',paidFrom:'',paidDate:''};DB.payments.push(p)}
+  p.amount=amt;p.desc=k.name+' × '+f0(q)+' '+k.unit;}
+function addBuy(id,q){q=num(q);if(!(q>0))return alert('اكتب الكمية');const c=stockCfg(),k=c.items.find(x=>x.id===id);
+  c.moves.push({id:uid(),date:curDay,itemId:id,qty:q,type:'buy',cost:num(k.cost)});buyPay(id);persist();renderBuys();if(typeof renderPayments==='function')renderPayments();
+  toast('+'+f0(q)+' '+k.name+(num(k.cost)?' = '+f(q*num(k.cost)):' (ما إلها تكلفة، حطها من تبويب المخزن)'))}
 async function undoBuy(id){const c=stockCfg(),mv=c.moves.filter(m=>m.itemId===id&&m.date===curDay&&m.type==='buy');if(!mv.length)return;
-  if(!await askPass('تشيل آخر إضافة ('+mv[mv.length-1].qty+')؟'))return;c.moves=c.moves.filter(m=>m!==mv[mv.length-1]);persist();renderBuys()}
+  if(!await askPass('تشيل آخر إضافة ('+mv[mv.length-1].qty+')؟'))return;c.moves=c.moves.filter(m=>m!==mv[mv.length-1]);buyPay(id);persist();renderBuys();if(typeof renderPayments==='function')renderPayments()}
 function renderBuys(){
-  const c=stockCfg();
-  $('buy-list').innerHTML=c.items.length?c.items.map(k=>{const b=boughtOn(k.id,curDay),lv=stockLevel(k.id);
-    return `<div class="line" style="flex-wrap:wrap"><div style="flex:1 1 120px;min-width:0"><b>${esc(k.name)}</b><div class="hint">بالمخزن: <b class="${lv<=num(k.min)?'neg':''}">${f0(lv)}</b> ${esc(k.unit)}${b?` · اليوم: +${f0(b)}`:''}</div></div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap">${[5,10,15,20].map(q=>`<button class="btn ghost small" onclick="addBuy('${k.id}',${q})">+${q}</button>`).join('')}${b?`<button class="btn del small" title="شيل آخر إضافة" onclick="undoBuy('${k.id}')">↶</button>`:''}</div></div>`}).join('')
+  const c=stockCfg();let tot=0;
+  $('buy-list').innerHTML=c.items.length?c.items.map(k=>{const b=boughtOn(k.id,curDay),lv=stockLevel(k.id),money=c.moves.filter(m=>m.itemId===k.id&&m.date===curDay&&m.type==='buy').reduce((a,m)=>a+num(m.qty)*num(m.cost),0);tot+=money;
+    return `<div class="line" style="flex-wrap:wrap"><div style="flex:1 1 140px;min-width:0"><b>${esc(k.name)}</b> <span class="hint">· ${num(k.cost)?f(k.cost)+' للـ'+esc(k.unit):'<span class="neg">ما إلها تكلفة</span>'}</span><div class="hint">بالمخزن: <b class="${lv<=num(k.min)?'neg':''}">${f0(lv)}</b> ${esc(k.unit)}${b?` · اليوم: +${f0(b)} = <b>${f(money)}</b>`:''}</div></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">${[5,10,15,20].map(q=>`<button class="btn ghost small" onclick="addBuy('${k.id}',${q})">+${q}</button>`).join('')}<input type="number" min="0" step="1" placeholder="كمية" style="width:74px;padding:6px" onkeydown="if(event.key==='Enter'){addBuy('${k.id}',this.value);this.value=''}"><button class="btn small" onclick="const i=this.previousElementSibling;addBuy('${k.id}',i.value);i.value=''">زيد</button>${b?`<button class="btn del small" title="شيل آخر إضافة" onclick="undoBuy('${k.id}')">↶</button>`:''}</div></div>`}).join('')
     :'<p class="hint">ما في مواد بالمخزن. زيدها من تبويب المخزن.</p>';
+  $('buy-total').textContent=f(tot);
 }
 const f0=n=>(Math.round(n*100)/100).toLocaleString('en-US');
 function addStockItem(){const c=stockCfg(),n=$('k-name').value.trim();if(!n)return alert('اكتب اسم المادة');
