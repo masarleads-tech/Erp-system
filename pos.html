@@ -14,6 +14,9 @@ header{background:var(--brand);color:#fff;padding:10px 16px;display:flex;align-i
 header h1{margin:0;font-size:24px;font-weight:800}
 .st{font-size:14px;font-weight:700;padding:4px 10px;border-radius:20px;background:rgba(255,255,255,.18)}
 .st.off{background:#ffd9d4;color:var(--bad)}
+.st.ok{background:#d8f3e1;color:#1f6b3d}.st.warn{background:#ffe9c2;color:#8a5a00}
+#prerr .box{background:#fff;border-radius:18px;padding:22px;max-width:440px;width:100%;text-align:center;border:4px solid var(--bad)}
+#prerr h2{color:var(--bad);margin:0 0 8px}#prerr .bt{display:flex;gap:10px;margin-top:16px}#prerr .bt button{flex:1;padding:14px;border:0;border-radius:12px;font:inherit;font-weight:800;font-size:17px;cursor:pointer}
 .sp{flex:1}
 button{font:inherit;cursor:pointer}
 .hbtn{background:rgba(255,255,255,.18);color:#fff;border:0;border-radius:10px;padding:6px 12px;font-weight:700}
@@ -54,11 +57,15 @@ button{font:inherit;cursor:pointer}
 </head>
 <body>
 <header>
-  <img src="/img/logo.png" alt="" style="width:40px;height:40px"><h1>بسيطة</h1><span class="st" id="net">…</span><span class="st hidden" id="queue"></span>
+  <img src="/img/logo.png" alt="" style="width:40px;height:40px"><h1>بسيطة</h1><span class="st" id="net">…</span><span class="st hidden" id="queue"></span><span class="st hidden" id="prst"></span>
   <span class="sp"></span><span id="who" style="font-weight:700"></span>
   <button class="hbtn hidden" id="bk" title="نزّل نسخة احتياطية على هاد الجهاز">💾 نسخة</button>
   <button class="hbtn hidden" id="out">خروج</button>
 </header>
+<div id="prerr" class="hidden" style="position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:20;display:flex;align-items:center;justify-content:center;padding:16px" role="alertdialog" aria-modal="true" aria-labelledby="pe-t">
+  <div class="box"><div style="font-size:54px">🖨️✕</div><h2 id="pe-t"></h2><p id="pe-why" style="margin:0;font-weight:700"></p><p id="pe-call" style="margin:8px 0 0"></p>
+  <div class="bt"><button id="pe-retry" style="background:#2f7d4f;color:#fff">اطبع مرة ثانية</button><button id="pe-skip" style="background:#ddd;color:#333">كمّل بدون فاتورة</button></div></div>
+</div>
 <div id="prbar" class="hidden" style="background:#c0392b;color:#fff;padding:10px 16px;font-weight:800;text-align:center;font-size:18px"></div>
 <div id="bkask" class="hidden" style="background:#fff7e6;border-bottom:2px solid #e8b04a;padding:12px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
   <b style="flex:1 1 260px">💾 خلّينا نحفظ نسخة من فواتير هاد الجهاز عليه، عشان إذا انقطع الواي فاي ما يضيع إشي. إذا المتصفح سألك "السماح بالتنزيل" اكبس سماح (Allow).</b>
@@ -109,7 +116,10 @@ async function login(){
     const d=await r.json();pin=p;sessionStorage.setItem('basita_pin',p);start(d)}
   catch(e){$('lerr').textContent='مش متصل بجهاز الحسابات. تأكد إنك على نفس الواي فاي.'}
 }
-function showPr(p){const b=$('prbar');if(!p||p.state!=='down'){b.classList.add('hidden');return}b.textContent='🖨️ الطابعة مش شغّالة، الفواتير بتنحفظ بس ما بتنطبع. اتصل بيامن'+(p.phone?' على '+p.phone:'');b.classList.remove('hidden')}
+let prPhone='';
+function prChip(p){const c=$('prst');if(!p){c.classList.add('hidden');return}if(p.phone)prPhone=p.phone;const M={ok:['🖨️ الطابعة شغّالة','ok'],retry:['🖨️ عم نرجّع الطابعة','warn'],down:['🖨️ الطابعة مش موصولة','off'],off:['🖨️ الطابعة مفصولة','off']}[p.state]||['🖨️ ؟',''];
+  c.textContent=M[0];c.className='st '+M[1];c.title=p.state==='off'?'المدير فاصل الطابعة، الفواتير ما بتنطبع':'';}
+function showPr(p){prChip(p);const b=$('prbar');if(!p||p.state!=='down'){b.classList.add('hidden');return}b.textContent='🖨️ الطابعة مش شغّالة، الفواتير بتنحفظ بس ما بتنطبع. اتصل بيامن'+(p.phone?' على '+p.phone:'');b.classList.remove('hidden')}
 function shop(n){if(!n)return;LS.set('basita_pos_shop',n);document.querySelector('header h1').textContent=n;document.title=n+' | الكاشير'}
 shop(LS.get('basita_pos_shop'));
 function start(d){showPr(d.printer);shop(d.shop);menu=d.menu||[];LS.set('basita_pos_menu',menu);if(d.cashier){cashierName=d.cashier;LS.set('basita_pos_cashier',cashierName)}$('who').textContent='👤 '+(cashierName||'');askBackup();
@@ -167,11 +177,33 @@ async function flush(){
       const r=await fetch('/api/sale',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(s)});
       if(r.status===403){toast('الرقم السري ما عاد شغّال. ادخل من جديد.');break}
       if(!r.ok)throw 0;
-      queue.shift();LS.set('basita_pos_queue',queue);}
+      const d=await r.json().catch(()=>({}));
+      queue.shift();LS.set('basita_pos_queue',queue);watchPrint(s.id,d.no,0);}
     setNet(true)}catch(e){setNet(false)}
   flushing=false;showQueue();
 }
-function setNet(v){online=v;$('net').textContent=v?'متصل ✓':'مش متصل';$('net').className='st'+(v?'':' off')}
+// ---- did the receipt print? ask the ERP for ~40 s, show an error the cashier has to answer if it failed ----
+const prErrs=[];
+function watchPrint(id,no,n){setTimeout(async()=>{let d;try{const r=await fetch('/api/print?pin='+encodeURIComponent(pin)+'&id='+encodeURIComponent(id),{cache:'no-store'});if(!r.ok)return;d=await r.json()}catch(e){if(n<20)watchPrint(id,no,n+1);return}
+  if(d.printer)prChip(d.printer);
+  const cur=prErrs[0]&&prErrs[0].id===id;
+  if(d.state==='printed'){if(cur)closeErr();toast('🖨️ انطبعت الفاتورة'+(no?' رقم '+no:''));return}
+  if(d.state==='off'){toast('⚠ ما انطبعت فاتورة: الطابعة مفصولة');return}
+  if(d.state==='skipped'||d.state==='unknown')return;
+  if(d.state==='failed'||n>=26){if(!prErrs.some(x=>x.id===id))prErrs.push({id,no});const e=prErrs.find(x=>x.id===id);e.why=d.state==='failed'?d.reason:'الطابعة ما ردّت';showErr()}
+  if(n<60&&prErrs.some(x=>x.id===id))watchPrint(id,no,n+1); // keep watching: if it prints on its own the error closes
+  else if(d.state==='waiting'&&n<26)watchPrint(id,no,n+1)},1500)}
+function showErr(){const e=prErrs[0];if(!e){$('prerr').classList.add('hidden');return}
+  $('pe-t').textContent='الفاتورة'+(e.no?' رقم '+e.no:'')+' ما انطبعت';$('pe-why').textContent=e.why||'';
+  $('pe-call').textContent='الفاتورة انحفظت عادي. إذا ضلّت الطابعة مش شغّالة اتصل بيامن'+(prPhone?' على '+prPhone:'')+(prErrs.length>1?' · في '+(prErrs.length-1)+' فواتير كمان ما انطبعت':'');
+  $('pe-retry').disabled=false;$('pe-retry').textContent='اطبع مرة ثانية';$('prerr').classList.remove('hidden')}
+function closeErr(){prErrs.shift();showErr()}
+$('pe-retry').onclick=async()=>{const e=prErrs[0];if(!e)return;const b=$('pe-retry');b.disabled=true;b.textContent='… عم نطبع';
+  try{const r=await fetch('/api/print?pin='+encodeURIComponent(pin)+'&id='+encodeURIComponent(e.id)+'&do=retry',{method:'POST'});const d=await r.json();if(d.printer)prChip(d.printer);
+    if(d.ok){closeErr();toast('🖨️ انطبعت');return}e.why=d.reason||'ما انطبعت'}catch(x){e.why='ما في اتصال مع الكمبيوتر'}
+  showErr()};
+$('pe-skip').onclick=async()=>{const e=prErrs[0];if(!e)return;try{await fetch('/api/print?pin='+encodeURIComponent(pin)+'&id='+encodeURIComponent(e.id)+'&do=skip',{method:'POST'})}catch(x){}closeErr()};
+function setNet(v){if(!v&&!$('prst').classList.contains('hidden'))prChip({state:'?'});online=v;$('net').textContent=v?'متصل ✓':'مش متصل';$('net').className='st'+(v?'':' off')}
 function showQueue(){const q=$('queue');q.classList.toggle('hidden',!queue.length);q.textContent=queue.length+' فاتورة بتستنى الإرسال'}
 async function ping(){try{const r=await fetch('/api/menu?pin='+encodeURIComponent(pin),{cache:'no-store'});setNet(true);
   if(r.ok){const d=await r.json();showPr(d.printer);if(JSON.stringify(d.menu)!==JSON.stringify(menu)){menu=d.menu;LS.set('basita_pos_menu',menu);renderMenu()}}}catch(e){setNet(false)}}

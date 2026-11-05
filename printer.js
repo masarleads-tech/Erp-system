@@ -7,6 +7,8 @@ module.exports=function(app,ipcMain,getWin){
   const dataFile=path.join(app.getPath('documents'),'Basita','basita-data.json');
   const cfg=()=>{try{const d=JSON.parse(fs.readFileSync(dataFile,'utf8'));return Object.assign({on:false,name:'',width:80,phone:''},d.printer||{})}catch(e){return {on:false,name:'',width:80,phone:''}}};
   let state={state:'off',msg:''},fails=0,queue=[],busy=false,retryT=null;
+  // what happened to each receipt, so the cashier tablet can say "printed" or show the error
+  const R=new Map(),mark=(id,st,reason)=>{R.set(id,{state:st,reason:reason||''});if(R.size>300)R.delete(R.keys().next().value)};
   const tell=()=>{const w=getWin();if(w&&!w.isDestroyed())w.webContents.send('printer-status',state)};
   const set=(st,msg)=>{state={state:st,msg:msg||'',fails};tell()};
   const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -51,18 +53,20 @@ module.exports=function(app,ipcMain,getWin){
     if(busy)return;busy=true;
     try{while(queue.length){const c=cfg();if(!c.on){queue=[];set('off');break}
       const r=await printOne(queue[0],c);
-      if(r.ok){queue.shift();fails=0;set('ok','')}
-      else{fails++;set(fails>=3?'down':'retry',r.reason);
-        if(fails>=3)queue=queue.slice(-1); // keep only the newest receipt waiting, older ones can be reprinted from the sales list
+      if(r.ok){mark(queue.shift().id,'printed');fails=0;set('ok','')}
+      else{fails++;set(fails>=3?'down':'retry',r.reason);mark(queue[0].id,'failed',r.reason);
+        if(fails>=3){queue.slice(0,-1).forEach(x=>mark(x.id,'failed',r.reason));queue=queue.slice(-1)} // keep only the newest receipt waiting, older ones can be reprinted from the sales list
         clearTimeout(retryT);retryT=setTimeout(run,10000);break}}}
     finally{busy=false}
   }
   // called by pos-server for every new sale
-  module.exports.printSale=s=>{const c=cfg();if(!c.on)return;queue.push(s);run()};
+  module.exports.printSale=s=>{const c=cfg();if(!c.on)return mark(s.id,'off','الطابعة مفصولة');mark(s.id,'waiting');queue.push(s);run()};
+  module.exports.receiptState=id=>R.get(id)||{state:'unknown',reason:''};
+  module.exports.skip=id=>{queue=queue.filter(x=>x.id!==id);mark(id,'skipped');return {ok:true}}; // cashier chose to go on without this receipt
   ipcMain.handle('printer-list',async()=>(await printers()).map(p=>({name:p.name,display:p.displayName||p.name,isDefault:!!p.isDefault})));
   ipcMain.handle('printer-test',async()=>{const c=cfg();const r=await printOne({no:0,date:new Date().toISOString().slice(0,10),time:new Date().toTimeString().slice(0,5),cashier:'تجربة',method:'cash',items:[{name:'تجربة طباعة',qty:1,price:0}],total:0},Object.assign(c,{on:true}));
     if(r.ok){fails=0;set(c.on?'ok':'off')}return r});
-  module.exports.reprint=async s=>{const r=await printOne(s,Object.assign(cfg(),{on:true}));if(r.ok&&cfg().on){fails=0;set('ok')}return r};
+  module.exports.reprint=async s=>{queue=queue.filter(x=>x.id!==s.id);const r=await printOne(s,Object.assign(cfg(),{on:true}));mark(s.id,r.ok?'printed':'failed',r.reason);if(r.ok&&cfg().on){fails=0;set('ok')}return r};
   ipcMain.on('printer-state',e=>{e.returnValue=state});
   // admin pressed connect / disconnect (the ERP has already saved DB.printer.on)
   const apply=async()=>{const c=cfg();fails=0;if(!c.on){queue=[];clearTimeout(retryT);set('off');return state}

@@ -47,6 +47,15 @@ module.exports=function(app,ipcMain,getWin){
       const w=who(c,u.searchParams.get('pin'));if(!w)return send(res,403,{error:'pin'});
       return send(res,200,{menu:(c.menu||[]).filter(m=>+m.price>0).map(m=>({id:m.id,cat:m.cat,name:m.name,price:+m.price,img:m.img||''})),cashier:w.name,printer:printerInfo(),shop:shopName()}); // no costs/links to the tablet; unpriced items hidden
     }
+    if(u.pathname==='/api/print'){ // did this receipt print? (GET) · retry / skip it (POST ?do=retry|skip)
+      const w=who(c,u.searchParams.get('pin'));if(!w)return send(res,403,{error:'pin'});
+      const id=String(u.searchParams.get('id')||''),pr=require('./printer.js'),x=S.sales.find(y=>y.id===id);
+      if(req.method==='POST'){const d=u.searchParams.get('do');
+        if(d==='skip')return send(res,200,pr.skip(id));
+        if(d==='retry'){if(!x)return send(res,404,{ok:false,reason:'الفاتورة مش موجودة'});return pr.reprint(x).then(r=>send(res,200,Object.assign(r,{printer:printerInfo()})),e=>send(res,200,{ok:false,reason:String(e.message||e)}))}
+        return send(res,400,{error:'bad'})}
+      return send(res,200,Object.assign({},pr.receiptState(id),{printer:printerInfo()}));
+    }
     if(u.pathname==='/api/sale'&&req.method==='POST'){
       let body='';req.on('data',d=>{body+=d;if(body.length>200000)req.destroy()});
       req.on('end',()=>{
