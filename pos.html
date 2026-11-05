@@ -126,7 +126,7 @@ $('clear').onclick=()=>{if(cart.length&&confirm('تفضّي الفاتورة؟')
 // ---- pay (queued so nothing is lost if the WiFi drops) ----
 function pay(method){
   if(!cart.length)return;
-  const sale={id:Date.now().toString(36)+Math.random().toString(36).slice(2,8),pin,method,items:cart.map(l=>({name:l.name,price:l.price,qty:l.qty}))};
+  const sale={id:Date.now().toString(36)+Math.random().toString(36).slice(2,8),pin,method,items:cart.map(l=>({id:l.id,name:l.name,price:l.price,qty:l.qty}))};
   const tot=cart.reduce((a,l)=>a+l.price*l.qty,0);
   queue.push(sale);LS.set('basita_pos_queue',queue);cart=[];renderCart();
   toast('✓ '+(method==='cash'?'كاش':'فيزا')+' '+f(tot));flush();

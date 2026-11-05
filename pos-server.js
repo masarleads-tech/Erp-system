@@ -35,9 +35,12 @@ module.exports=function(app,ipcMain,getWin){
         const w=who(c,s.pin);if(!w)return send(res,403,{error:'pin'});
         if(!s.id||!Array.isArray(s.items)||!s.items.length||!['cash','card'].includes(s.method))return send(res,400,{error:'bad'});
         const dup=S.sales.find(x=>x.id===s.id);if(dup)return send(res,200,{ok:true,no:dup.no});
-        const items=s.items.map(i=>({name:String(i.name).slice(0,80),price:Math.max(0,+i.price||0),qty:Math.max(1,Math.round(+i.qty||1))}));
+        const items=s.items.map(i=>({id:String(i.id||'').slice(0,40),name:String(i.name).slice(0,80),price:Math.max(0,+i.price||0),qty:Math.max(1,Math.round(+i.qty||1))}));
+        // what this sale takes out of storage, from the menu links at the time of sale
+        const use={};for(const i of items){const m=(c.menu||[]).find(x=>x.id===i.id)||(c.menu||[]).find(x=>x.name===i.name);
+          for(const u of (m&&m.use)||[])use[u.itemId]=(use[u.itemId]||0)+(+u.qty||0)*i.qty}
         const total=Math.round(items.reduce((a,i)=>a+i.price*i.qty,0)*1000)/1000;
-        const n=new Date(),sale={id:String(s.id).slice(0,60),no:S.next++,date:today(),time:pad(n.getHours())+':'+pad(n.getMinutes()),items,total,method:s.method,cashier:w.name,voided:false};
+        const n=new Date(),sale={id:String(s.id).slice(0,60),no:S.next++,date:today(),time:pad(n.getHours())+':'+pad(n.getMinutes()),items,total,method:s.method,cashier:w.name,use:Object.entries(use).map(([itemId,qty])=>({itemId,qty})),voided:false};
         S.sales.push(sale);try{saveSales()}catch(e){S.sales.pop();S.next--;return send(res,500,{error:'save'})}
         send(res,200,{ok:true,no:sale.no});
       });return;
