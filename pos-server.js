@@ -16,7 +16,7 @@ module.exports=function(app,ipcMain,getWin){
     if(!S)S={sales:[],next:1};
   }
   function saveSales(){const t=JSON.stringify(S);writeSafe(salesFile,t);writeSafe(path.join(bdir,'pos-sales-'+today()+'.json'),t);const w=getWin();if(w&&!w.isDestroyed())w.webContents.send('pos-changed')}
-  const cfg=()=>{const d=readJSON(dataFile)||{};return d.pos||{menu:[],users:[]}};
+  const cfg=()=>{const d=readJSON(dataFile)||{};const c=d.pos||{menu:[],users:[]};c.stock=(d.stock&&d.stock.items)||[];return c};
   const who=(c,pin)=>(c.users||[]).find(x=>x.pin&&String(pin)===String(x.pin)&&x.active!==false);
   const page=fs.readFileSync(path.join(__dirname,'pos.html'));
   const send=(res,code,obj)=>{res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(obj))};
@@ -37,10 +37,13 @@ module.exports=function(app,ipcMain,getWin){
         const dup=S.sales.find(x=>x.id===s.id);if(dup)return send(res,200,{ok:true,no:dup.no});
         const items=s.items.map(i=>({id:String(i.id||'').slice(0,40),name:String(i.name).slice(0,80),price:Math.max(0,+i.price||0),qty:Math.max(1,Math.round(+i.qty||1))}));
         // what this sale takes out of storage, from the menu links at the time of sale
-        const use={};for(const i of items){const m=(c.menu||[]).find(x=>x.id===i.id)||(c.menu||[]).find(x=>x.name===i.name);
-          for(const u of (m&&m.use)||[])use[u.itemId]=(use[u.itemId]||0)+(+u.qty||0)*i.qty}
+        const kc=id=>{const k=c.stock.find(x=>x.id===id);return k?Math.max(0,+k.cost||0):0};
+        const use={};for(const i of items){const m=(c.menu||[]).find(x=>x.id===i.id)||(c.menu||[]).find(x=>x.name===i.name);let uc=0;
+          for(const u of (m&&m.use)||[]){use[u.itemId]=(use[u.itemId]||0)+(+u.qty||0)*i.qty;uc+=(+u.qty||0)*kc(u.itemId)}
+          i.cost=Math.round(uc*1000)/1000} // cost of one unit of this meal at sale time
         const total=Math.round(items.reduce((a,i)=>a+i.price*i.qty,0)*1000)/1000;
-        const n=new Date(),sale={id:String(s.id).slice(0,60),no:S.next++,date:today(),time:pad(n.getHours())+':'+pad(n.getMinutes()),items,total,method:s.method,cashier:w.name,use:Object.entries(use).map(([itemId,qty])=>({itemId,qty})),voided:false};
+        const n=new Date(),sale={id:String(s.id).slice(0,60),no:S.next++,date:today(),time:pad(n.getHours())+':'+pad(n.getMinutes()),items,total,method:s.method,cashier:w.name,use:Object.entries(use).map(([itemId,qty])=>({itemId,qty,cost:kc(itemId)})),voided:false};
+        sale.cost=Math.round(sale.use.reduce((a,u)=>a+u.qty*u.cost,0)*1000)/1000; // cost of what left storage, at today's prices
         S.sales.push(sale);try{saveSales()}catch(e){S.sales.pop();S.next--;return send(res,500,{error:'save'})}
         send(res,200,{ok:true,no:sale.no});
       });return;
