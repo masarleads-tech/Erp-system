@@ -126,6 +126,7 @@ tfoot td{font-weight:800;background:var(--soft)}
     <button data-tab="pos">الكاشير</button>
     <button data-tab="stock">المخزن</button>
     <button data-tab="set">نسخة احتياطية واستيراد</button>
+    <button data-tab="tech" id="tech-btn" class="hidden">🛠️ الدعم الفني</button>
     <button id="lockbtn" title="قفل">🔒 قفل</button>
   </nav>
 </header>
@@ -274,21 +275,6 @@ tfoot td{font-weight:800;background:var(--soft)}
     <h2>🖥️ الكاشير على الواي فاي</h2>
     <div id="pos-addr"></div>
   </div>
-  <div class="card">
-    <h2>🧾 طابعة الفواتير</h2>
-    <p class="hint">طابعة حرارية (58 أو 80 ملم) موصولة على هاد الكمبيوتر ومعرّفة على الويندوز. كل ما الكاشير يكبس كاش أو فيزا بتطلع الفاتورة لحالها.</p>
-    <div class="row" style="align-items:end">
-      <div><label for="pr-name">الطابعة</label><select id="pr-name"></select></div>
-      <div style="flex:0 0 130px"><label for="pr-width">عرض الورق</label><select id="pr-width"><option value="80">80 ملم</option><option value="58">58 ملم</option></select></div>
-      <div><label for="pr-phone">رقم يامن (للمساعدة)</label><input id="pr-phone" type="tel" placeholder="07xxxxxxxx" style="direction:ltr;text-align:right"></div>
-    </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center">
-      <button class="btn" id="pr-toggle"></button>
-      <button class="btn ghost" id="pr-test">اطبع فاتورة تجربة</button>
-      <button class="btn ghost small" id="pr-refresh">حدّث قائمة الطابعات</button>
-      <span id="pr-state" class="chip" style="cursor:default"></span>
-    </div>
-  </div>
   <div class="dgrid">
     <div class="card">
       <h2>👤 الكاشيرية</h2>
@@ -319,6 +305,43 @@ tfoot td{font-weight:800;background:var(--soft)}
 </section>
 
 <!-- ============ BACKUP ============ -->
+<section id="tab-tech" class="hidden">
+  <div class="card" style="border:2px solid var(--brand)">
+    <h2>🛠️ الدعم الفني</h2>
+    <p class="hint">هاد القسم بس للدعم الفني (السوبر أدمن). المدير العادي ما بشوفه.</p>
+  </div>
+  <div class="card">
+    <h2>🧾 طابعة الفواتير</h2>
+    <p class="hint">طابعة حرارية (58 أو 80 ملم) موصولة على هاد الكمبيوتر ومعرّفة على الويندوز. كل ما الكاشير يكبس كاش أو فيزا بتطلع الفاتورة لحالها.</p>
+    <div class="row" style="align-items:end">
+      <div><label for="pr-name">الطابعة</label><select id="pr-name"></select></div>
+      <div style="flex:0 0 130px"><label for="pr-width">عرض الورق</label><select id="pr-width"><option value="80">80 ملم</option><option value="58">58 ملم</option></select></div>
+      <div><label for="pr-phone">رقم يامن (للمساعدة)</label><input id="pr-phone" type="tel" placeholder="07xxxxxxxx" style="direction:ltr;text-align:right"></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center">
+      <button class="btn" id="pr-toggle"></button>
+      <button class="btn ghost" id="pr-test">اطبع فاتورة تجربة</button>
+      <button class="btn ghost small" id="pr-refresh">حدّث قائمة الطابعات</button>
+      <span id="pr-state" class="chip" style="cursor:default"></span>
+    </div>
+  </div>
+  <div class="card">
+    <h2>🤖 مفتاح الذكاء الاصطناعي (API)</h2>
+    <p class="hint">المفتاح بنحفظ مشفّر على هاد الكمبيوتر بس، مش بملف البيانات ولا بالنسخ الاحتياطية ولا على أجهزة الكاشير. الاختبار بحتاج إنترنت.</p>
+    <div class="row" style="align-items:end">
+      <div><label for="ai-key">المفتاح</label><input id="ai-key" type="password" autocomplete="off" placeholder="sk-ant-..." style="direction:ltr;text-align:left"></div>
+      <div style="flex:0 0 220px"><label for="ai-model">الموديل</label><select id="ai-model"></select></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center">
+      <button class="btn" id="ai-save">احفظ</button>
+      <button class="btn ghost" id="ai-test">اختبر الاتصال</button>
+      <button class="btn del" id="ai-clear">امسح المفتاح</button>
+      <span id="ai-state" class="chip" style="cursor:default"></span>
+    </div>
+    <p id="ai-result" class="hint" style="margin-top:10px"></p>
+  </div>
+</section>
+
 <section id="tab-set" class="hidden">
   <div class="card">
     <h2>🔑 كلمة سر المدير</h2>
@@ -420,11 +443,12 @@ function toast(m){const t=$('toast');t.textContent=m;t.style.display='block';cle
 // ---------- tabs ----------
 document.querySelectorAll('nav button[data-tab]').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('nav button[data-tab]').forEach(x=>x.classList.toggle('on',x===b));
-  ['daily','pay','rep','pos','stock','set'].forEach(t=>$('tab-'+t).classList.toggle('hidden',t!==b.dataset.tab));
+  ['daily','pay','rep','pos','stock','set','tech'].forEach(t=>$('tab-'+t).classList.toggle('hidden',t!==b.dataset.tab));
   if(b.dataset.tab==='pay')renderPayments();
   if(b.dataset.tab==='rep')showReport();
   if(b.dataset.tab==='pos')renderPos();
   if(b.dataset.tab==='stock')renderStock();
+  if(b.dataset.tab==='tech'){loadPrinters();aiLoad()}
 });
 
 // ---------- daily wizard ----------
@@ -743,7 +767,12 @@ window.confirm=()=>{throw new Error('use ask()')};
 // ---------- password for every delete ----------
 const DEFAULT_ADMIN='2002';
 async function sha(t){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('basita:'+t));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
-async function isAdmin(p){if(!DB.admin||!DB.admin.hash){DB.admin={hash:await sha(DEFAULT_ADMIN)};persist()}return (await sha(p))===DB.admin.hash}
+// super admin (technical support): its own password, sees the 🛠️ tab; also counts as admin everywhere (deletes, resetting the admin password)
+const SUPER_HASH='f8bab0c6ee3373b0cf9084715eed182e81805b8b582f880567057033714b10d8';
+async function isSuper(p){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('basita-super:'+p));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')===SUPER_HASH}
+let SUPER=false;
+function setSuper(v){SUPER=!!v;$('tech-btn').classList.toggle('hidden',!SUPER);if(!SUPER&&!$('tab-tech').classList.contains('hidden'))document.querySelector('nav button[data-tab=daily]').click()}
+async function isAdmin(p){if(await isSuper(p))return true;if(!DB.admin||!DB.admin.hash){DB.admin={hash:await sha(DEFAULT_ADMIN)};persist()}return (await sha(p))===DB.admin.hash}
 function askPass(msg){return new Promise(res=>{
   const box=$('pw'),inp=$('pw-in');$('pw-msg').textContent=msg;inp.value='';$('pw-err').classList.add('hidden');box.classList.remove('hidden');setTimeout(()=>inp.focus(),30);
   const done=v=>{box.classList.add('hidden');$('pw-ok').onclick=$('pw-no').onclick=inp.onkeydown=null;res(v)};
@@ -886,8 +915,8 @@ const lineCost=(s,i)=>{if(i.cost!=null)return num(i.cost);const m=posCfg().menu.
 function saleCost(s){if(s.cost!=null)return num(s.cost);return (s.use||[]).reduce((a,u)=>{const k=stockCfg().items.find(x=>x.id===u.itemId);return a+num(u.qty)*(k?num(k.cost):0)},0)}
 
 // ---------- admin lock ----------
-function lock(){$('lock').classList.remove('hidden');$('lock-in').value='';$('lock-err').classList.add('hidden');setTimeout(()=>$('lock-in').focus(),30)}
-async function unlock(){if(await isAdmin($('lock-in').value)){$('lock').classList.add('hidden');idle=0}else{$('lock-err').classList.remove('hidden');$('lock-in').value='';$('lock-in').focus()}}
+function lock(){setSuper(false);$('lock').classList.remove('hidden');$('lock-in').value='';$('lock-err').classList.add('hidden');setTimeout(()=>$('lock-in').focus(),30)}
+async function unlock(){const v=$('lock-in').value;if(await isSuper(v)||await isAdmin(v)){setSuper(await isSuper(v));$('lock').classList.add('hidden');idle=0}else{$('lock-err').classList.remove('hidden');$('lock-in').value='';$('lock-in').focus()}}
 $('lock-ok').onclick=unlock;$('lock-in').onkeydown=e=>{if(e.key==='Enter')unlock()};$('lockbtn').onclick=lock;
 let idle=0;['mousemove','keydown','click','touchstart'].forEach(ev=>addEventListener(ev,()=>idle=0,{passive:true}));
 setInterval(()=>{if(++idle>=15&&$('lock').classList.contains('hidden'))lock()},60000); // lock after 15 idle minutes
@@ -953,6 +982,20 @@ if(HASPOS&&window.basita.printers){
   $('pr-refresh').onclick=loadPrinters;
   window.basita.onPrinter(showPrState);loadPrinters();
 } else {const pc=$('pr-name').closest('.card');if(pc)pc.classList.add('hidden')}
+
+// ---------- AI key (super admin) ----------
+const HASAI=!!(window.basita&&window.basita.aiStatus);
+function aiShow(st){$('ai-model').innerHTML=st.models.map(m=>`<option value="${m}" ${m===st.model?'selected':''}>${m}</option>`).join('');
+  $('ai-state').textContent=st.hasKey?'🔑 في مفتاح محفوظ (…'+st.last4+')':'ما في مفتاح';$('ai-state').style.cssText='cursor:default;'+(st.hasKey?'background:var(--goodsoft);color:var(--good)':'background:#eee;color:#555');
+  $('ai-result').textContent=st.lastTest?('آخر اختبار '+st.lastTest.at.slice(0,16).replace('T',' ')+': '+(st.lastTest.ok?'✓ زبط ('+st.lastTest.msg+')':'✕ '+st.lastTest.msg)):''}
+async function aiLoad(){if(!HASAI){$('ai-key').closest('.card').classList.add('hidden');return}aiShow(await window.basita.aiStatus())}
+if(HASAI){
+  $('ai-save').onclick=async()=>{if(!SUPER)return;const k=$('ai-key').value.trim();if(k&&!/^sk-ant-/.test(k)&&!await ask('المفتاح ما بلّش بـ sk-ant-. متأكد إنه صح؟','احفظه'))return;
+    aiShow(await window.basita.aiSave(k,$('ai-model').value));$('ai-key').value='';toast('انحفظ')};
+  $('ai-test').onclick=async()=>{if(!SUPER)return;$('ai-result').textContent='… عم نختبر';const r=await window.basita.aiTest();
+    $('ai-result').textContent=r.ok?'✓ الاتصال شغّال. الموديل: '+r.model+' · الرد: '+r.reply+' · الوقت: '+(r.ms/1000).toFixed(1)+' ث':'✕ '+r.reason};
+  $('ai-clear').onclick=async()=>{if(!SUPER)return;if(!await askPass('تمسح مفتاح الذكاء الاصطناعي؟'))return;aiShow(await window.basita.aiClear());toast('انمسح المفتاح')};
+}
 async function reprint(id){const r=await window.basita.reprint(id);if(r&&r.ok)toast('🖨️ انطبعت');else alert('ما انطبعت: '+((r&&r.reason)||''))}
 
 loadPosSales();

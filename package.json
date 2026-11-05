@@ -21,6 +21,7 @@
       "main.js",
       "preload.js",
       "printer.js",
+      "ai.js",
       "data.js",
       "pos-server.js",
       "pos.html"
@@ -37,5 +38,8 @@
       "shortcutName": "Start ERP",
       "include": "build/installer.nsh"
     }
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "1.6.0"
   }
 }

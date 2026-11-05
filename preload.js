@@ -13,5 +13,9 @@ contextBridge.exposeInMainWorld('basita',{
   printerState:()=>ipcRenderer.sendSync('printer-state'),
   reprint:id=>ipcRenderer.invoke('pos-reprint',id),
   onPrinter:cb=>ipcRenderer.on('printer-status',(e,st)=>cb(st)),
+  aiStatus:()=>ipcRenderer.invoke('ai-status'),
+  aiSave:(k,m)=>ipcRenderer.invoke('ai-save',k,m),
+  aiTest:()=>ipcRenderer.invoke('ai-test'),
+  aiClear:()=>ipcRenderer.invoke('ai-clear'),
   onPos:cb=>ipcRenderer.on('pos-changed',()=>cb())
 });

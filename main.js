@@ -3,7 +3,7 @@ const path=require('path'),fs=require('fs');
 let win;
 require('./data.js')(app,ipcMain);
 require('./data.js').autoBackup(app);
-app.whenReady().then(()=>{require('./printer.js')(app,ipcMain,()=>win);require('./pos-server.js')(app,ipcMain,()=>win)});
+app.whenReady().then(()=>{require('./ai.js')(app,ipcMain);require('./printer.js')(app,ipcMain,()=>win);require('./pos-server.js')(app,ipcMain,()=>win)});
 if(!app.requestSingleInstanceLock()){app.quit()}
 app.on('second-instance',()=>{if(win){if(win.isMinimized())win.restore();win.focus()}});
 function create(){
