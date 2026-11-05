@@ -36,10 +36,15 @@ module.exports=function(app,ipcMain,getWin){
   const server=http.createServer((req,res)=>{
     const u=new URL(req.url,'http://x');
     if(req.method==='GET'&&(u.pathname==='/'||u.pathname==='/pos')){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});return res.end(page)}
+    // menu pictures: the admin's own (Documents\\Basita\\images) first, then the ones that ship with the app
+    if(req.method==='GET'&&u.pathname.startsWith('/img/')){const n=decodeURIComponent(u.pathname.slice(5));
+      if(!/^[\w.-]+\.(jpg|jpeg|png|webp)$/i.test(n)){res.writeHead(404);return res.end()}
+      for(const f of [path.join(dir,'images',n),path.join(__dirname,'img',n)])if(fs.existsSync(f)){res.writeHead(200,{'Content-Type':/png$/i.test(n)?'image/png':/webp$/i.test(n)?'image/webp':'image/jpeg','Cache-Control':'max-age=3600'});return fs.createReadStream(f).pipe(res)}
+      res.writeHead(404);return res.end()}
     const c=cfg();
     if(u.pathname==='/api/menu'){ // also used as cashier login
       const w=who(c,u.searchParams.get('pin'));if(!w)return send(res,403,{error:'pin'});
-      return send(res,200,{menu:(c.menu||[]).filter(m=>+m.price>0).map(m=>({id:m.id,cat:m.cat,name:m.name,price:+m.price})),cashier:w.name,printer:printerInfo()}); // no costs/links to the tablet; unpriced items hidden
+      return send(res,200,{menu:(c.menu||[]).filter(m=>+m.price>0).map(m=>({id:m.id,cat:m.cat,name:m.name,price:+m.price,img:m.img||''})),cashier:w.name,printer:printerInfo()}); // no costs/links to the tablet; unpriced items hidden
     }
     if(u.pathname==='/api/sale'&&req.method==='POST'){
       let body='';req.on('data',d=>{body+=d;if(body.length>200000)req.destroy()});
@@ -66,6 +71,9 @@ module.exports=function(app,ipcMain,getWin){
       const w=who(c,x.pin);S.sales.push(mk(c,x,w?w.name:String(x.cashier||'—').slice(0,40),x));n++}
     if(n)saveSales();e.returnValue=n}catch(err){e.returnValue=-1}});
   ipcMain.handle('pos-reprint',async(e,id)=>{const x=S.sales.find(y=>y.id===id);if(!x)return {ok:false,reason:'الفاتورة مش موجودة'};return await require('./printer.js').reprint(x)});
+  ipcMain.handle('img-save',(e,id,dataUrl)=>{const mm=/^data:image\/(jpeg|png|webp);base64,(.+)$/.exec(String(dataUrl||''));if(!mm)return '';
+    const ext=mm[1]==='jpeg'?'jpg':mm[1],n=String(id).replace(/[^\w-]/g,'')+'-'+Date.now().toString(36)+'.'+ext;fs.mkdirSync(path.join(dir,'images'),{recursive:true});
+    fs.writeFileSync(path.join(dir,'images',n),Buffer.from(mm[2],'base64'));return n});
   ipcMain.on('pos-sales',e=>{e.returnValue=S.sales});
   ipcMain.on('pos-void',(e,id,v)=>{const s=S.sales.find(x=>x.id===id);if(s){s.voided=!!v;try{saveSales();e.returnValue=true}catch(err){e.returnValue=false}}else e.returnValue=false});
 };

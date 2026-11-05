@@ -118,7 +118,7 @@ tfoot td{font-weight:800;background:var(--soft)}
 </head>
 <body>
 <header>
-  <div><h1>بسيطة</h1><small>نظام حسابات المطعم</small></div>
+  <div style="display:flex;align-items:center;gap:10px"><img src="img/logo.png" alt="" style="width:52px;height:52px"><div><h1>بسيطة</h1><small>نظام حسابات المطعم</small></div></div>
   <nav>
     <button data-tab="daily" class="on">اليومية</button>
     <button data-tab="pay">الدفعات</button>
@@ -379,7 +379,7 @@ tfoot td{font-weight:800;background:var(--soft)}
 <div class="toast" id="toast"></div>
 <div id="lock" class="pw">
   <div class="pwbox" style="text-align:center">
-    <div style="font-size:44px;font-weight:800;color:var(--brand)">بسيطة</div>
+    <img src="img/logo.png" alt="بسيطة" style="width:120px;height:120px;display:block;margin:0 auto 6px">
     <h2>دخول المدير</h2>
     <label for="lock-in">كلمة سر المدير</label>
     <input type="password" id="lock-in" autocomplete="off" style="text-align:center;font-size:22px">
@@ -851,6 +851,12 @@ function seedV2(){ // one-time upgrade: meat + bread storage, full menu
   SEED_MENU.forEach(([cat,name,price])=>{if(!c.menu.some(m=>norm(m.name)===norm(name)))c.menu.push({id:uid(),cat,name,price,use:autoUse(name)})});
   DB.seedV=2;persist();
 }
+const SEED_IMG={'بسيطة سبيشل دوق ساندويش':'special-dog','بسيطة سبيشل دوق وجبة':'special-dog','عرض هوت دوق':'special-dog','كلاسيك دوق ساندويش':'classic-dog','كلاسيك دوق وجبة':'classic-dog','ميني بسيطة':'classic-dog',
+ 'كورن دوق':'corn-dog','كلاسيك برغر ساندويش':'classic-burger','كلاسيك برغر وجبة':'classic-burger','سموكي برغر ساندويش':'smoky-burger','سموكي برغر وجبة':'smoky-burger',
+ 'مايتي دايناميت ساندويش':'mighty-dynamite','مايتي دايناميت وجبة':'mighty-dynamite','مايتي رانش ساندويش':'mighty-ranch','مايتي رانش وجبة':'mighty-ranch',
+ 'زنجر فرنسي عادي ساندويش':'french-zinger','زنجر فرنسي عادي وجبة':'french-zinger','زنجر فرنسي حار ساندويش':'french-zinger','زنجر فرنسي حار وجبة':'french-zinger',
+ 'بوكس الزنجر':'zinger-box','بوكس الهوت دوق':'hotdog-box','حلقات البصل (4 قطع)':'onion-rings','بطاطا بلجيكية':'fries','كينزا':'kinza'};
+function seedV4(){if(DB.seedV>=4)return;posCfg().menu.forEach(m=>{if(!m.img&&SEED_IMG[m.name])m.img=SEED_IMG[m.name]+'.jpg'});DB.seedV=4;persist()}
 function seedV3(){ // corrected beef meal prices from the fixed menu (only if the admin hasn't changed them)
   if(DB.seedV>=3)return;const fix={'كلاسيك برغر وجبة':2.75,'سموكي برغر وجبة':3};
   posCfg().menu.forEach(m=>{if(fix[m.name]&&Math.abs(num(m.price)-1.99)<1e-9)m.price=fix[m.name]});DB.seedV=3;persist();
@@ -956,7 +962,7 @@ function renderPos(){
   $('u-table').innerHTML=c.users.length?'<thead><tr><th>الاسم</th><th>الرقم السري</th><th>الحالة</th><th></th></tr></thead><tbody>'+c.users.map(u=>`<tr><td>${esc(u.name)}</td><td style="direction:ltr;text-align:right">${'•'.repeat(u.pin.length)}</td><td><button class="btn small ${u.active===false?'':'ghost'}" onclick="toggleUser('${u.id}')">${u.active===false?'موقوف · فعّل':'شغّال · أوقف'}</button></td><td><button class="btn del" onclick="delUser('${u.id}')">✕</button></td></tr>`).join('')+'</tbody>':'<tr><td class="hint">ما في كاشيرية. زيد أول واحد.</td></tr>';
   $('m-cats').innerHTML=[...new Set(c.menu.map(m=>m.cat))].map(x=>`<option value="${esc(x)}">`).join('');
   const menu=[...c.menu].sort((a,b)=>a.cat.localeCompare(b.cat,'ar'));
-  $('m-table').innerHTML=menu.length?'<thead><tr><th>القسم</th><th>الصنف</th><th>السعر</th><th></th></tr></thead><tbody>'+menu.map(m=>`<tr><td>${esc(m.cat)}</td><td>${esc(m.name)}</td><td><input type="number" step="0.001" min="0" value="${m.price||''}" placeholder="السعر" style="width:110px" onchange="setPrice('${m.id}',this.value)">${num(m.price)>0?'':'<div class="req" style="font-size:12px">مخفي عن الكاشير لحد ما تحط سعر</div>'}</td><td><button class="btn del" onclick="delItem('${m.id}')">✕</button></td></tr>`).join('')+'</tbody>':'<tr><td class="hint">ما في أصناف. زيد أول صنف.</td></tr>';
+  $('m-table').innerHTML=menu.length?'<thead><tr><th>الصورة</th><th>القسم</th><th>الصنف</th><th>السعر</th><th></th></tr></thead><tbody>'+menu.map(m=>`<tr><td><label title="غيّر الصورة" style="cursor:pointer;display:inline-block">${m.img&&IMGBASE?`<img src="${IMGBASE+encodeURIComponent(m.img)}" alt="" style="width:56px;height:46px;object-fit:cover;border-radius:8px;display:block">`:'<span class="btn ghost small">📷</span>'}<input type="file" accept="image/*" class="hidden" onchange="setImg('${m.id}',this)"></label></td><td>${esc(m.cat)}</td><td>${esc(m.name)}</td><td><input type="number" step="0.001" min="0" value="${m.price||''}" placeholder="السعر" style="width:110px" onchange="setPrice('${m.id}',this.value)">${num(m.price)>0?'':'<div class="req" style="font-size:12px">مخفي عن الكاشير لحد ما تحط سعر</div>'}</td><td><button class="btn del" onclick="delItem('${m.id}')">✕</button></td></tr>`).join('')+'</tbody>':'<tr><td class="hint">ما في أصناف. زيد أول صنف.</td></tr>';
   const d=$('s-date').value||today(),list=POS_SALES.filter(x=>x.date===d).sort((a,b)=>b.no-a.no),pd=posDay(d);
   $('s-table').innerHTML=list.length?'<thead><tr><th>#</th><th>الوقت</th><th>الكاشير</th><th>الأصناف</th><th>الدفع</th><th>المبلغ</th><th></th></tr></thead><tbody>'+list.map(x=>`<tr style="${x.voided?'opacity:.45;text-decoration:line-through':''}"><td>${x.no}</td><td>${x.time}</td><td>${esc(x.cashier||'')}</td><td>${x.items.map(i=>esc(i.name)+(i.qty>1?' ×'+i.qty:'')).join('، ')}</td><td>${x.method==='cash'?'كاش':'فيزا'}</td><td>${f(x.total)}</td><td style="white-space:nowrap">${x.voided?'':`<button class="btn ghost small" title="اطبع الفاتورة مرة ثانية" onclick="reprint('${x.id}')">🖨️</button> `}${x.voided?`<button class="btn ghost small" onclick="voidSale('${x.id}',false)">رجّعها</button>`:`<button class="btn del small" onclick="voidSale('${x.id}',true)">ألغِ</button>`}</td></tr>`).join('')+`</tbody><tfoot><tr><td colspan="5">المجموع (${pd.count} فاتورة · كاش ${f(pd.cash)} · فيزا ${f(pd.card)})</td><td colspan="2">${f(pd.total)}</td></tr></tfoot>`:'<tr><td class="hint">ما في فواتير بهاد اليوم.</td></tr>';
 }
@@ -996,6 +1002,12 @@ if(HASAI){
     $('ai-result').textContent=r.ok?'✓ الاتصال شغّال. الموديل: '+r.model+' · الرد: '+r.reply+' · الوقت: '+(r.ms/1000).toFixed(1)+' ث':'✕ '+r.reason};
   $('ai-clear').onclick=async()=>{if(!SUPER)return;if(!await askPass('تمسح مفتاح الذكاء الاصطناعي؟'))return;aiShow(await window.basita.aiClear());toast('انمسح المفتاح')};
 }
+// menu pictures: shrink to 360×300 here, then save on this computer (Documents\\Basita\\images)
+const IMGBASE=HASPOS?'http://127.0.0.1:'+window.basita.posInfo().port+'/img/':'';
+function setImg(id,inp){const fl=inp.files[0];if(!fl||!window.basita.imgSave)return;const im=new Image();im.onload=async()=>{
+  const W=360,H=300,c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d'),r=Math.max(W/im.width,H/im.height),w=im.width*r,h=im.height*r;
+  x.drawImage(im,(W-w)/2,(H-h)/2,w,h);URL.revokeObjectURL(im.src);const n=await window.basita.imgSave(id,c.toDataURL('image/jpeg',0.8));
+  if(!n)return alert('ما قدرنا نحفظ الصورة');posCfg().menu.find(m=>m.id===id).img=n;persist();renderPos();toast('انحفظت الصورة')};im.onerror=()=>alert('هاد الملف مش صورة');im.src=URL.createObjectURL(fl)}
 async function reprint(id){const r=await window.basita.reprint(id);if(r&&r.ok)toast('🖨️ انطبعت');else alert('ما انطبعت: '+((r&&r.reason)||''))}
 
 loadPosSales();
@@ -1004,7 +1016,7 @@ if(HASPOS)window.basita.onPos(()=>{loadPosSales();calc();renderBuys();if(!$('tab
 // ---------- init ----------
 $('d-date').value=today();$('p-date').value=today();$('p-month').value=today().slice(0,7);
 $('rp-date').value=today();$('rp-month').value=today().slice(0,7);$('z-day').value=today();$('z-month').value=today().slice(0,7);
-setCat(BASE_CATS[0]);setSrc('');$('p-paydate').value=today();$('s-date').value=today();posCfg();stockCfg();seedV2();seedV3();autoLinkAll(false);loadDay();lock();
+setCat(BASE_CATS[0]);setSrc('');$('p-paydate').value=today();$('s-date').value=today();posCfg();stockCfg();seedV2();seedV3();seedV4();autoLinkAll(false);loadDay();lock();
 </script>
 </body>
 </html>

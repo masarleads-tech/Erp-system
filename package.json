@@ -22,6 +22,7 @@
       "preload.js",
       "printer.js",
       "ai.js",
+      "img/**",
       "data.js",
       "pos-server.js",
       "pos.html"

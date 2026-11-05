@@ -7,7 +7,7 @@ app.whenReady().then(()=>{require('./ai.js')(app,ipcMain);require('./printer.js'
 if(!app.requestSingleInstanceLock()){app.quit()}
 app.on('second-instance',()=>{if(win){if(win.isMinimized())win.restore();win.focus()}});
 function create(){
-  win=new BrowserWindow({width:1200,height:850,minWidth:380,title:'بسيطة',backgroundColor:'#f6f2ea',autoHideMenuBar:true,
+  win=new BrowserWindow({width:1200,height:850,minWidth:380,title:'بسيطة',icon:path.join(__dirname,'img','logo.png'),backgroundColor:'#f6f2ea',autoHideMenuBar:true,
     webPreferences:{preload:path.join(__dirname,'preload.js'),contextIsolation:true,nodeIntegration:false}});
   Menu.setApplicationMenu(null);
   // keep keyboard focus in the page (after save dialogs, minimising, alt-tab), so text boxes always take typing

@@ -17,5 +17,6 @@ contextBridge.exposeInMainWorld('basita',{
   aiSave:(k,m)=>ipcRenderer.invoke('ai-save',k,m),
   aiTest:()=>ipcRenderer.invoke('ai-test'),
   aiClear:()=>ipcRenderer.invoke('ai-clear'),
+  imgSave:(id,data)=>ipcRenderer.invoke('img-save',id,data),
   onPos:cb=>ipcRenderer.on('pos-changed',()=>cb())
 });
