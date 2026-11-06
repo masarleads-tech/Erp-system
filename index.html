@@ -143,6 +143,7 @@ tfoot td{font-weight:800;background:var(--soft)}
   </nav>
 </header>
 
+<div id="netbar" class="hidden" style="background:#c0392b;color:#fff;padding:10px 16px;font-weight:800;text-align:center">📶 مش متصل مع كمبيوتر المطعم. تعديلاتك محفوظة على هاد الجهاز وبتنبعت لحالها لما يرجع الاتصال.</div>
 <main>
 <!-- ============ DAILY ============ -->
 <section id="tab-daily">
@@ -489,17 +490,51 @@ const BASE_CATS=['مشتريات وادي الرمم','كنزا','نثرية','�
 let CATS=BASE_CATS.slice();
 function refreshCats(){CATS=[...BASE_CATS,...new Set((DB&&DB.payments||[]).map(p=>p.cat).filter(c=>c&&!BASE_CATS.includes(c)))]}
 let DB;
-const DESK=window.basita&&window.basita.load; // desktop app: data lives in a file on disk
-try{if(DESK)DB=window.basita.load()}catch(e){}
-if(!DB)try{DB=JSON.parse(localStorage.getItem(KEY))}catch(e){}
+const DESK=window.basita&&window.basita.load; // desktop app (or a device on the WiFi): data lives on the main computer
+const NET=!!(window.basita&&window.basita.net); // this page was opened from another device on the WiFi
+const SYNC=!!(window.basita&&window.basita.sync);
+// One copy of the data lives on the main computer. Every screen (the desktop window and any phone/laptop on the WiFi)
+// keeps BASE = the copy it last got from there, and sends only what it changed since (diff), so two devices can work
+// at the same time without wiping each other's work. rev tells a screen that someone else changed something.
+let BASE=null,REV=0,OFFLINE=false;
+const clone=o=>o==null?o:JSON.parse(JSON.stringify(o));
+const PKEY='basita_net_pending';
+try{if(SYNC){const g=window.basita.get();DB=g.db;REV=g.rev}else if(DESK)DB=window.basita.load()}catch(e){}
+if(NET){ // changes this device made while the WiFi was down, saved here, go to the main computer first
+  try{const pd=JSON.parse(localStorage.getItem(PKEY)||'null');if(pd&&pd.base&&pd.db&&DB){const ops=diff(pd.base,pd.db);if(ops.length){const r=window.basita.sync(ops,-1);if(r&&r.ok){DB=r.db||DB;REV=r.rev}}}localStorage.removeItem(PKEY)}catch(e){}}
+const FIRST=!DB;
+if(!DB&&!NET)try{DB=JSON.parse(localStorage.getItem(KEY))}catch(e){}
 if(!DB) DB={days:{},payments:[],employees:[]};
+BASE=clone(DB);
+// what changed between two copies: [{p:[path],v}] · lists with ids (payments, menu, stock…) are matched by id, lists of names as sets
+function diff(a,b,p=[],ops=[]){
+  if(a===b)return ops;
+  const isO=x=>x&&typeof x==='object'&&!Array.isArray(x),keyed=x=>Array.isArray(x)&&x.every(e=>e&&typeof e==='object'&&!Array.isArray(e)&&e.id!=null&&e.id!==''),strs=x=>Array.isArray(x)&&x.every(e=>typeof e==='string');
+  if(isO(a)&&isO(b)){for(const k of Object.keys(a))if(!(k in b))ops.push({p:p.concat(k)});for(const k of Object.keys(b))diff(a[k],b[k],p.concat(k),ops);return ops}
+  if(Array.isArray(a)&&Array.isArray(b)){
+    if(keyed(a)&&keyed(b)&&(a.length||b.length)&&new Set(b.map(e=>e.id)).size===b.length&&new Set(a.map(e=>e.id)).size===a.length){const A=new Map(a.map(e=>[e.id,e]));const B=new Set(b.map(e=>e.id));
+      for(const e of a)if(!B.has(e.id))ops.push({p:p.concat({i:e.id})});
+      for(const e of b){const o=A.get(e.id);if(!o)ops.push({p:p.concat({i:e.id}),v:e});else if(JSON.stringify(o)!==JSON.stringify(e))diff(o,e,p.concat({i:e.id}),ops)}return ops}
+    if(strs(a)&&strs(b)&&(a.length||b.length)){const add=b.filter(x=>!a.includes(x)),rm=a.filter(x=>!b.includes(x));if(add.length||rm.length)ops.push({p,add,rm});return ops}
+  }
+  if(JSON.stringify(a)!==JSON.stringify(b))ops.push(b===undefined?{p}:{p,v:b});
+  return ops}
+function syncNow(){ // send this screen's changes; returns true when the main computer has them
+  const ops=diff(BASE,DB);if(!ops.length)return true;
+  let r;try{r=window.basita.sync(ops,REV)}catch(e){r=null}
+  if(!r||!r.ok){setOffline(true);try{localStorage.setItem(PKEY,JSON.stringify({base:BASE,db:DB}))}catch(e){}return false}
+  setOffline(false);try{localStorage.removeItem(PKEY)}catch(e){}
+  REV=r.rev;if(r.stale&&r.db){DB=r.db;BASE=clone(DB);setTimeout(refreshView,0)}else BASE=clone(DB);
+  return true}
+function setOffline(v){if(OFFLINE===v)return;OFFLINE=v;const b=document.getElementById('netbar');if(b)b.classList.toggle('hidden',!v)}
 function persist(){
   const j=JSON.stringify(DB);let ok=false;
-  try{localStorage.setItem(KEY,j);ok=true}catch(e){}
-  if(DESK){try{ok=window.basita.save(j)}catch(e){ok=false}}
+  if(!NET)try{localStorage.setItem(KEY,j);ok=true}catch(e){}
+  if(SYNC){ok=syncNow()||NET}
+  else if(DESK){try{ok=window.basita.save(j)}catch(e){ok=false}}
   if(!ok)alert('ما قدرنا نحفظ البيانات! نزّل نسخة احتياطية هلأ.');
 }
-if(DESK)persist(); // move any older browser data into the file
+if(DESK&&FIRST&&!NET){try{window.basita.save(JSON.stringify(DB));if(SYNC){const g=window.basita.get();REV=g.rev;BASE=clone(DB)}}catch(e){}} // move any older browser data into the file
 
 // ---------- helpers ----------
 const $=id=>document.getElementById(id);
@@ -844,11 +879,23 @@ window.confirm=()=>{throw new Error('use ask()')};
 
 // ---------- password for every delete ----------
 const DEFAULT_ADMIN='2002';
-async function sha(t){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('basita:'+t));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}
+async function sha(t){return hashHex('basita:'+t)}
 // super admin (technical support): its own password, sees the 🛠️ tab; also counts as admin everywhere (deletes, resetting the admin password)
 const SUPER_HASH='f8bab0c6ee3373b0cf9084715eed182e81805b8b582f880567057033714b10d8';
-async function isSuper(p){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('basita-super:'+p));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')===SUPER_HASH}
+async function isSuper(p){return (await hashHex('basita-super:'+p))===SUPER_HASH}
 let SUPER=false;
+// SHA-256 in plain JS, for phones/laptops that open the screens over the WiFi (http pages have no crypto.subtle)
+function sha256hex(str){const b=new TextEncoder().encode(str),K=[],H0=[];let n=2,c=0;const fr=x=>(x-Math.floor(x))*4294967296|0;
+  while(c<64){let pr=true;for(let d=2;d*d<=n;d++)if(n%d===0){pr=false;break}if(pr){if(c<8)H0[c]=fr(Math.pow(n,1/2));K[c]=fr(Math.pow(n,1/3));c++}n++}
+  const l=b.length,w=new Uint8Array(((l+9+63)>>6)<<6);w.set(b);w[l]=0x80;const dv=new DataView(w.buffer);dv.setUint32(w.length-4,l*8>>>0);dv.setUint32(w.length-8,Math.floor(l/536870912));
+  const h=H0.slice(),W=new Array(64),r=(x,k)=>x>>>k|x<<(32-k);
+  for(let o=0;o<w.length;o+=64){for(let i=0;i<16;i++)W[i]=dv.getUint32(o+i*4);
+    for(let i=16;i<64;i++){const s0=r(W[i-15],7)^r(W[i-15],18)^W[i-15]>>>3,s1=r(W[i-2],17)^r(W[i-2],19)^W[i-2]>>>10;W[i]=W[i-16]+s0+W[i-7]+s1|0}
+    let [A,B,C,D,E,F,G,Hh]=h;
+    for(let i=0;i<64;i++){const t1=Hh+(r(E,6)^r(E,11)^r(E,25))+(E&F^~E&G)+K[i]+W[i]|0,t2=(r(A,2)^r(A,13)^r(A,22))+(A&B^A&C^B&C)|0;Hh=G;G=F;F=E;E=D+t1|0;D=C;C=B;B=A;A=t1+t2|0}
+    h[0]=h[0]+A|0;h[1]=h[1]+B|0;h[2]=h[2]+C|0;h[3]=h[3]+D|0;h[4]=h[4]+E|0;h[5]=h[5]+F|0;h[6]=h[6]+G|0;h[7]=h[7]+Hh|0}
+  return h.map(x=>(x>>>0).toString(16).padStart(8,'0')).join('')}
+async function hashHex(t){if(window.crypto&&crypto.subtle){const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(t));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,'0')).join('')}return sha256hex(t)}
 function setSuper(v){SUPER=!!v;$('tech-btn').classList.toggle('hidden',!SUPER);if(!SUPER&&!$('tab-tech').classList.contains('hidden'))document.querySelector('nav button[data-tab=daily]').click()}
 async function isAdmin(p){if(await isSuper(p))return true;if(!DB.admin||!DB.admin.hash){DB.admin={hash:await sha(DEFAULT_ADMIN)};persist()}return (await sha(p))===DB.admin.hash}
 function askPass(msg){return new Promise(res=>{
@@ -1000,8 +1047,15 @@ function saleCost(s){if(s.cost!=null)return num(s.cost);return (s.use||[]).reduc
 
 // ---------- admin lock ----------
 function lock(){setSuper(false);$('lock').classList.remove('hidden');$('lock-in').value='';$('lock-err').classList.add('hidden');setTimeout(()=>$('lock-in').focus(),30)}
-async function unlock(){const v=$('lock-in').value;if(await isSuper(v)||await isAdmin(v)){setSuper(await isSuper(v));$('lock').classList.add('hidden');idle=0}else{$('lock-err').classList.remove('hidden');$('lock-in').value='';$('lock-in').focus()}}
+async function unlock(){const v=$('lock-in').value;if(await isSuper(v)||await isAdmin(v)){if(NET)window.basita.login(v);setSuper(await isSuper(v));$('lock').classList.add('hidden');idle=0}else{$('lock-err').classList.remove('hidden');$('lock-in').value='';$('lock-in').focus()}}
 $('lock-ok').onclick=unlock;$('lock-in').onkeydown=e=>{if(e.key==='Enter')unlock()};$('lockbtn').onclick=lock;
+// ---- live updates from other devices ----
+function busyTyping(){const a=document.activeElement;return !!(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)&&a.type!=='button'&&a.type!=='file')||!$('mb').classList.contains('hidden')}
+function refreshView(){refreshCats();const t=(document.querySelector('nav button[data-tab].on')||{}).dataset||{};profShow();loadDay();
+  if(t.tab==='pay')renderPayments();if(t.tab==='rep')showReport();if(t.tab==='pos')renderPos();if(t.tab==='stock')renderStock();if(t.tab==='tech'){profLoad()}}
+if(SYNC)setInterval(()=>{if(busyTyping())return;let r;try{r=window.basita.rev()}catch(e){setOffline(true);return}setOffline(false);
+  if(diff(BASE,DB).length){syncNow();return} // our own unsent changes first (they merge with the others)
+  if(r.rev!==REV){try{const g=window.basita.get();DB=g.db||DB;REV=g.rev;BASE=clone(DB);refreshView()}catch(e){}}},NET?4000:3000);
 let idle=0;['mousemove','keydown','click','touchstart'].forEach(ev=>addEventListener(ev,()=>idle=0,{passive:true}));
 setInterval(()=>{if(++idle>=15&&$('lock').classList.contains('hidden'))lock()},60000); // lock after 15 idle minutes
 async function changeAdmin(){
@@ -1036,7 +1090,7 @@ function renderPos(){
   if(!HASPOS){$('pos-addr').innerHTML='<p class="hint">الكاشير بشتغل بس من برنامج بسيطة على الكمبيوتر (مش من ملف المتصفح).</p>'}
   else{const info=window.basita.posInfo();
     $('pos-addr').innerHTML=(info.urls.length?`<p>على أي تابلت أو موبايل أو كمبيوتر على <b>نفس الواي فاي</b>، افتح المتصفح واكتب:</p>`+info.urls.map(u=>`<div style="direction:ltr;text-align:center;font-size:30px;font-weight:800;color:var(--brand2);background:var(--soft);border-radius:12px;padding:10px;margin:6px 0">${u}</div>`).join(''):'<p class="req">هاد الكمبيوتر مش متصل بواي فاي هلأ.</p>')+
-    `<p class="hint">خلّي هاد البرنامج مفتوح طول ما الكاشير شغّال. الفواتير بتنحفظ على هاد الكمبيوتر وبتدخل لحالها على دخل اليوم.</p>`}
+    `<p class="hint">نفس الرابط للكل: الكاشير بيدخل برقمه السري، والمدير بكلمة سر المدير، والدعم الفني بكلمة سره، من أي جهاز على نفس الواي فاي. كل التعديلات بتنحفظ على هاد الكمبيوتر وبتوصل لكل الأجهزة لحالها.</p><p class="hint">خلّي هاد البرنامج مفتوح طول ما الكاشير شغّال. الفواتير بتنحفظ على هاد الكمبيوتر وبتدخل لحالها على دخل اليوم.</p>`}
   $('u-table').innerHTML=c.users.length?'<thead><tr><th>الاسم</th><th>الرقم السري</th><th>الحالة</th><th></th></tr></thead><tbody>'+c.users.map(u=>`<tr><td>${esc(u.name)}</td><td style="direction:ltr;text-align:right">${'•'.repeat(u.pin.length)}</td><td><button class="btn small ${u.active===false?'':'ghost'}" onclick="toggleUser('${u.id}')">${u.active===false?'موقوف · فعّل':'شغّال · أوقف'}</button></td><td><button class="btn del" onclick="delUser('${u.id}')">✕</button></td></tr>`).join('')+'</tbody>':'<tr><td class="hint">ما في كاشيرية. زيد أول واحد.</td></tr>';
   $('m-cats').innerHTML=[...new Set(c.menu.map(m=>m.cat))].map(x=>`<option value="${esc(x)}">`).join('');
   const menu=[...c.menu].sort((a,b)=>a.cat.localeCompare(b.cat,'ar'));
@@ -1054,7 +1108,7 @@ function showPrState(st){if(!HASPOS)return;const t=PR_TXT[st.state]||PR_TXT.off;
   if(st.state==='down'&&prCfg().on&&!prShown){prShown=true;const ph=prCfg().phone;
     ask('🖨️ الطابعة مش راضية توصل لحالها.\n'+(st.msg?st.msg+'\n':'')+'\nاتصل بيامن'+(ph?' على '+ph:'')+'.\n\nالفواتير بتنحفظ عادي، وبتقدر تطبعها بعدين من قائمة الفواتير (🖨️).','تمام',false).then(()=>{})}
   if(st.state==='ok')prShown=false}
-async function loadPrinters(){if(!HASPOS||!window.basita.printers)return;const c=prCfg(),l=await window.basita.printers();
+async function loadPrinters(){if(!HASPOS||!window.basita.printers||NET&&!SUPER)return;const c=prCfg(),l=await window.basita.printers();
   $('pr-name').innerHTML='<option value="">— اختار الطابعة —</option>'+l.map(p=>`<option value="${esc(p.name)}" ${p.name===c.name?'selected':''}>${esc(p.display)}${p.isDefault?' (الافتراضية)':''}</option>`).join('')+(c.name&&!l.some(p=>p.name===c.name)?`<option value="${esc(c.name)}" selected>${esc(c.name)} (مش موصولة)</option>`:'');
   $('pr-width').value=String(c.width);$('pr-phone').value=c.phone||'';showPrState(window.basita.printerState())}
 if(HASPOS&&window.basita.printers){
@@ -1151,7 +1205,7 @@ if(HASAI){
   $('ai-file').onchange=e=>{const fl=e.target.files[0];e.target.value='';if(!fl)return;const im=new Image();im.onload=()=>{const d=shrink(im,im.naturalWidth,im.naturalHeight);URL.revokeObjectURL(im.src);billRead(d)};im.onerror=()=>alert('هاد الملف مش صورة');im.src=URL.createObjectURL(fl)};
 }
 // menu pictures: shrink to 360×300 here, then save on this computer (Documents\\Basita\\images)
-const IMGBASE=HASPOS?'http://127.0.0.1:'+window.basita.posInfo().port+'/img/':'';
+const IMGBASE=NET?'/img/':HASPOS?'http://127.0.0.1:'+window.basita.posInfo().port+'/img/':'';
 function setImg(id,inp){const fl=inp.files[0];if(!fl||!window.basita.imgSave)return;const im=new Image();im.onload=async()=>{
   const W=360,H=300,c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d'),r=Math.max(W/im.width,H/im.height),w=im.width*r,h=im.height*r;
   x.drawImage(im,(W-w)/2,(H-h)/2,w,h);URL.revokeObjectURL(im.src);const n=await window.basita.imgSave(id,c.toDataURL('image/jpeg',0.8));
@@ -1165,6 +1219,7 @@ if(HASPOS)window.basita.onPos(()=>{loadPosSales();calc();renderBuys();if(!$('tab
 $('d-date').value=today();$('p-date').value=today();$('p-month').value=today().slice(0,7);
 $('rp-date').value=today();$('rp-month').value=today().slice(0,7);$('z-day').value=today();$('z-month').value=today().slice(0,7);
 setCat(BASE_CATS[0]);setSrc('');$('p-paydate').value=today();$('s-date').value=today();posCfg();stockCfg();seedV2();seedV3();seedV4();autoLinkAll(false);profShow();aiGate();loadDay();lock();
+if(NET){$('lock').classList.add('hidden');setSuper(window.basita.role()==='super');$('lockbtn').textContent='🚪 خروج';$('lockbtn').onclick=()=>{syncNow();window.basita.logout()}}
 </script>
 </body>
 </html>

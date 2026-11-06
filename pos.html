@@ -74,9 +74,9 @@ button{font:inherit;cursor:pointer}
 
 <div id="loginv" class="login">
   <img src="/img/logo.png" alt="بسيطة" style="width:110px;height:110px;display:block;margin:0 auto 4px">
-  <h2 style="margin-top:0">دخول الكاشير</h2>
-  <p style="color:var(--muted)">اكتب الرقم السري تبعك</p>
-  <input id="pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off">
+  <h2 style="margin-top:0">تسجيل الدخول</h2>
+  <p style="color:var(--muted)">الكاشير: الرقم السري تبعك · المدير والدعم الفني: كلمة السر</p>
+  <input id="pin" type="password" inputmode="numeric" maxlength="32" autocomplete="off">
   <div class="keys" id="keys"></div>
   <div class="err" id="lerr"></div>
   <button class="go" id="lgo">دخول</button>
@@ -111,7 +111,12 @@ $('pin').onkeydown=e=>{if(e.key==='Enter')login()};
 $('lgo').onclick=login;
 async function login(){
   const p=$('pin').value.trim();if(!p)return;$('lerr').textContent='';
-  try{const r=await fetch('/api/menu?pin='+encodeURIComponent(p),{cache:'no-store'});
+  try{const a=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:p})});
+    if(a.status===429){$('lerr').textContent='محاولات غلط كثير. استنى 5 دقايق وجرّب.';$('pin').value='';return}
+    if(a.status===403){$('lerr').textContent='الرقم السري غلط';$('pin').value='';return}
+    const who=await a.json();
+    if(who.token){sessionStorage.setItem('basita_tok',who.token);sessionStorage.setItem('basita_role',who.role);location.href='/erp';return} // admin / super admin: the full system on this device
+    const r=await fetch('/api/menu?pin='+encodeURIComponent(p),{cache:'no-store'});
     if(r.status===403){$('lerr').textContent='الرقم السري غلط';$('pin').value='';return}
     const d=await r.json();pin=p;sessionStorage.setItem('basita_pin',p);start(d)}
   catch(e){$('lerr').textContent='مش متصل بجهاز الحسابات. تأكد إنك على نفس الواي فاي.'}

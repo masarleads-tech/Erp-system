@@ -1,6 +1,11 @@
 const {app,BrowserWindow,ipcMain,dialog,Menu,shell}=require('electron');
 const path=require('path'),fs=require('fs');
 let win;
+// remember every main-computer function, so devices on the WiFi (admin / super admin) can call the same ones over the network
+global.BASITA_IPC={};
+{const h=ipcMain.handle.bind(ipcMain),o=ipcMain.on.bind(ipcMain);
+  ipcMain.handle=(ch,fn)=>{global.BASITA_IPC[ch]={fn,sync:false};return h(ch,fn)};
+  ipcMain.on=(ch,fn)=>{global.BASITA_IPC[ch]={fn,sync:true};return o(ch,fn)}}
 require('./data.js')(app,ipcMain);
 require('./data.js').autoBackup(app);
 app.whenReady().then(()=>{require('./ai.js')(app,ipcMain);require('./printer.js')(app,ipcMain,()=>win);require('./pos-server.js')(app,ipcMain,()=>win)});

@@ -15,7 +15,8 @@ module.exports=function(app,ipcMain,getWin){
     S=null;try{for(const b of fs.readdirSync(bdir).filter(n=>n.startsWith('pos-')).sort().reverse()){S=readJSON(path.join(bdir,b));if(S&&Array.isArray(S.sales))break;S=null}}catch(e){}
     if(!S)S={sales:[],next:1};
   }
-  function saveSales(){const t=JSON.stringify(S);writeSafe(salesFile,t);writeSafe(path.join(bdir,'pos-sales-'+today()+'.json'),t);const w=getWin();if(w&&!w.isDestroyed())w.webContents.send('pos-changed')}
+  let SREV=1;module.exports.salesRev=()=>SREV;
+  function saveSales(){SREV++;const t=JSON.stringify(S);writeSafe(salesFile,t);writeSafe(path.join(bdir,'pos-sales-'+today()+'.json'),t);const w=getWin();if(w&&!w.isDestroyed())w.webContents.send('pos-changed')}
   const cfg=()=>{const d=readJSON(dataFile)||{};const c=d.pos||{menu:[],users:[]};c.stock=(d.stock&&d.stock.items)||[];return c};
   const shopName=()=>{const d=readJSON(dataFile)||{};return (d.profile&&d.profile.name)||'بسيطة'};
   const printerInfo=()=>{try{const st=require('./printer.js').state();const d=readJSON(dataFile)||{};return {state:st.state,phone:(d.printer&&d.printer.phone)||''}}catch(e){return {state:'off'}}};
@@ -34,8 +35,44 @@ module.exports=function(app,ipcMain,getWin){
         const n=new Date(),sale={id:String(s.id).slice(0,60),no:S.next++,date:at&&/^\d{4}-\d\d-\d\d$/.test(at.date)?at.date:today(),time:at&&/^\d\d:\d\d$/.test(at.time)?at.time:pad(n.getHours())+':'+pad(n.getMinutes()),items,total,method:s.method,cashier:name,use:Object.entries(use).map(([itemId,qty])=>({itemId,qty,cost:kc(itemId)})),voided:false};
         sale.cost=Math.round(sale.use.reduce((a,u)=>a+u.qty*u.cost,0)*1000)/1000; // cost of what left storage, at today's prices
         return sale}
+  // ---- one login for everyone on the WiFi: cashier PIN, admin password or super admin password ----
+  const crypto=require('crypto'),H=t=>crypto.createHash('sha256').update(t).digest('hex');
+  const SUPER_HASH='f8bab0c6ee3373b0cf9084715eed182e81805b8b582f880567057033714b10d8';
+  const SESS=new Map(),FAIL=new Map(); // token -> {role,last} · ip -> {n,t}
+  const blocked=ip=>{const f=FAIL.get(ip);return f&&f.n>=8&&Date.now()-f.t<5*60*1000};
+  const failed=ip=>{const f=FAIL.get(ip)||{n:0,t:0};if(Date.now()-f.t>5*60*1000)f.n=0;f.n++;f.t=Date.now();FAIL.set(ip,f)};
+  function roleOf(code){code=String(code||'');if(!code)return null;
+    if(H('basita-super:'+code)===SUPER_HASH)return {role:'super'};
+    const d=readJSON(dataFile)||{},ah=(d.admin&&d.admin.hash)||H('basita:2002');
+    if(H('basita:'+code)===ah)return {role:'admin'};
+    const w=who(cfg(),code);if(w)return {role:'cashier',name:w.name};return null}
+  const session=req=>{const t=req.headers['x-token'];const s=t&&SESS.get(String(t));if(!s)return null;if(Date.now()-s.last>12*3600*1000){SESS.delete(t);return null}s.last=Date.now();return s};
+  // which main-computer functions a signed-in device may call
+  const ADMIN_CH=new Set(['data-get','data-rev','data-sync','data-save','pos-info','pos-import','pos-reprint','img-save','pos-sales','pos-void','printer-state','ai-status','ai-ask','ai-bill']);
+  const SUPER_CH=new Set(['printer-list','printer-test','printer-apply','ai-save','ai-clear','ai-test']);
+  const erpPage=()=>fs.readFileSync(path.join(__dirname,'index.html'),'utf8').replace('<head>','<head><script src="/net.js"></script>');
   const server=http.createServer((req,res)=>{
-    const u=new URL(req.url,'http://x');
+    const u=new URL(req.url,'http://x'),ip=req.socket.remoteAddress||'';
+    if(req.method==='POST'&&u.pathname==='/api/login'){
+      if(blocked(ip))return send(res,429,{error:'wait'});
+      let body='';req.on('data',d=>{body+=d;if(body.length>2000)req.destroy()});
+      req.on('end',()=>{let code='';try{code=JSON.parse(body).code}catch(e){}
+        const r=roleOf(code);if(!r){failed(ip);return send(res,403,{error:'code'})}
+        FAIL.delete(ip);if(r.role==='cashier')return send(res,200,{role:'cashier'});
+        const t=crypto.randomBytes(24).toString('hex');SESS.set(t,{role:r.role,last:Date.now()});return send(res,200,{role:r.role,token:t})});return}
+    if(req.method==='GET'&&u.pathname==='/erp'){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});return res.end(erpPage())}
+    if(req.method==='GET'&&u.pathname==='/net.js'){res.writeHead(200,{'Content-Type':'text/javascript; charset=utf-8','Cache-Control':'no-store'});return res.end(fs.readFileSync(path.join(__dirname,'net.js')))}
+    if(req.method==='POST'&&u.pathname.startsWith('/api/ipc/')){
+      const ch=u.pathname.slice(9),s=session(req);
+      if(!s)return send(res,401,{error:'login'});
+      if(!(ADMIN_CH.has(ch)||(s.role==='super'&&SUPER_CH.has(ch))))return send(res,403,{error:'role'});
+      const reg=global.BASITA_IPC&&global.BASITA_IPC[ch];if(!reg)return send(res,404,{error:'ch'});
+      const chunks=[];let size=0;req.on('data',d=>{size+=d.length;if(size>20e6)req.destroy();else chunks.push(d)});
+      req.on('end',async()=>{let args=[];try{args=JSON.parse(Buffer.concat(chunks).toString('utf8')||'[]')}catch(e){return send(res,400,{error:'json'})}
+        if(!Array.isArray(args))args=[];
+        if(ch==='data-sync')args[2]=s.role; // the role comes from the login, never from the device
+        try{if(reg.sync){const e={returnValue:undefined};reg.fn(e,...args);return send(res,200,{r:e.returnValue===undefined?null:e.returnValue})}
+          const r=await reg.fn({},...args);send(res,200,{r:r===undefined?null:r})}catch(err){send(res,500,{error:String(err.message||err)})}});return}
     if(req.method==='GET'&&(u.pathname==='/'||u.pathname==='/pos')){res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});return res.end(page)}
     // menu pictures: the admin's own (Documents\\Basita\\images) first, then the ones that ship with the app
     if(req.method==='GET'&&u.pathname.startsWith('/img/')){const n=decodeURIComponent(u.pathname.slice(5));
@@ -44,7 +81,8 @@ module.exports=function(app,ipcMain,getWin){
       res.writeHead(404);return res.end()}
     const c=cfg();
     if(u.pathname==='/api/menu'){ // also used as cashier login
-      const w=who(c,u.searchParams.get('pin'));if(!w)return send(res,403,{error:'pin'});
+      if(blocked(ip))return send(res,429,{error:'wait'});
+      const w=who(c,u.searchParams.get('pin'));if(!w){failed(ip);return send(res,403,{error:'pin'})}
       return send(res,200,{menu:(c.menu||[]).filter(m=>+m.price>0).map(m=>({id:m.id,cat:m.cat,name:m.name,price:+m.price,img:m.img||''})),cashier:w.name,printer:printerInfo(),shop:shopName()}); // no costs/links to the tablet; unpriced items hidden
     }
     if(u.pathname==='/api/print'){ // did this receipt print? (GET) · retry / skip it (POST ?do=retry|skip)

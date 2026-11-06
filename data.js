@@ -13,25 +13,66 @@ module.exports=function(app,ipcMain){
     try{fs.writeSync(fd,txt);fs.fsyncSync(fd)}finally{fs.closeSync(fd)}
     fs.renameSync(tmp,f);
   }
-  ipcMain.on('data-load',e=>{
+  let DB=null,REV=1;
+  function loadFile(){
     let d=readJSON(file);
     if(!d){ // main file missing or damaged: fall back to the newest good backup
       const bs=fs.existsSync(bdir)?fs.readdirSync(bdir).filter(n=>n.endsWith('.json')).sort().reverse():[];
       for(const b of bs){d=readJSON(path.join(bdir,b));if(d)break}
     }
-    e.returnValue=d;
-  });
+    return d}
+  DB=loadFile();
+  function writeAll(txt){
+    writeSafe(file,txt);
+    const n=new Date(),day=n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0');
+    writeSafe(path.join(bdir,'basita-'+day+'.json'),txt);
+    const bs=fs.readdirSync(bdir).filter(x=>/^basita-\d{4}-\d\d-\d\d\.json$/.test(x)).sort();
+    bs.slice(0,Math.max(0,bs.length-90)).forEach(x=>{try{fs.unlinkSync(path.join(bdir,x))}catch(_){}})}
+  ipcMain.on('data-load',e=>{e.returnValue=DB});
+  // full replace (first start, or a device with no copy yet)
   ipcMain.on('data-save',(e,txt)=>{
+    try{const d=JSON.parse(txt);writeAll(txt);DB=d;REV++;e.returnValue=true}catch(err){e.returnValue=false}
+  });
+  // ---- several devices on the WiFi share one copy of the data, kept here on the main computer ----
+  // Each device sends only what it changed since it last synced ("ops"), so changes made at the same time
+  // on different devices are merged instead of one wiping the other. rev goes up by one on every change.
+  ipcMain.on('data-get',e=>{e.returnValue={db:DB,rev:REV}});
+  ipcMain.on('data-rev',e=>{let pos=0;try{pos=require('./pos-server.js').salesRev()}catch(_){}e.returnValue={rev:REV,pos}});
+  ipcMain.on('data-sync',(e,ops,base,role)=>{
     try{
-      writeSafe(file,txt);
-      const n=new Date(),day=n.getFullYear()+'-'+String(n.getMonth()+1).padStart(2,'0')+'-'+String(n.getDate()).padStart(2,'0');
-      writeSafe(path.join(bdir,'basita-'+day+'.json'),txt);
-      const bs=fs.readdirSync(bdir).filter(x=>/^basita-\d{4}-\d\d-\d\d\.json$/.test(x)).sort();
-      bs.slice(0,Math.max(0,bs.length-90)).forEach(x=>{try{fs.unlinkSync(path.join(bdir,x))}catch(_){}});
-      e.returnValue=true;
-    }catch(err){e.returnValue=false}
+      if(!Array.isArray(ops))throw new Error('bad');
+      if(!DB)DB={days:{},payments:[],employees:[]};
+      const was=REV;let n=0;
+      for(const op of ops){if(role&&role!=='super'&&op&&Array.isArray(op.p)&&['printer','profile'].includes(op.p[0]))continue;if(apply(DB,op))n++}
+      if(n){writeAll(JSON.stringify(DB));REV++}
+      const stale=base!==was; // somebody else changed something since this device last synced
+      e.returnValue={ok:true,rev:REV,stale,db:stale?DB:undefined};
+    }catch(err){e.returnValue={ok:false,reason:String(err.message||err)}}
   });
 };
+// apply one change: {p:[path], v:value} (v missing = delete) or {p, add:[..], rm:[..]} for a list of names.
+// A path step {i:id} means "the element with this id" inside a list (payments, menu, stock items…).
+const BAD=new Set(['__proto__','prototype','constructor']);
+function apply(root,op){
+  if(!op||!Array.isArray(op.p)||!op.p.length)return false;
+  let o=root;const P=op.p;
+  const step=(o,k)=>k&&typeof k==='object'?(Array.isArray(o)?o.find(x=>x&&x.id===k.i):undefined):o[k];
+  for(let j=0;j<P.length-1;j++){const k=P[j];if(typeof k==='string'&&BAD.has(k))return false;
+    let nx=step(o,k);
+    if(nx===undefined||nx===null||typeof nx!=='object'){
+      if(k&&typeof k==='object')return false; // that element was deleted on another device
+      nx=P[j+1]&&typeof P[j+1]==='object'?[]:{};o[k]=nx}
+    o=nx}
+  const k=P[P.length-1];if(typeof k==='string'&&BAD.has(k))return false;
+  if(op.add||op.rm){let a=step(o,k);if(!Array.isArray(a)){a=[];if(typeof k==='object')return false;o[k]=a}
+    for(const x of op.rm||[]){const i=a.indexOf(x);if(i>=0)a.splice(i,1)}
+    for(const x of op.add||[])if(!a.includes(x))a.push(x);return true}
+  if(k&&typeof k==='object'){if(!Array.isArray(o))return false;const i=o.findIndex(x=>x&&x.id===k.i);
+    if(!('v' in op)){if(i>=0)o.splice(i,1);return true}
+    if(i>=0)o[i]=op.v;else o.push(op.v);return true}
+  if(Array.isArray(o)&&typeof k!=='number')return false;
+  if(!('v' in op))delete o[k];else o[k]=op.v;return true}
+module.exports.apply=apply;
 
 // Automatic backup every 30 minutes: Documents\Basita\backups\auto\basita-YYYY-MM-DD-HHmm.json
 // One file holds the ERP data and the POS sales together. Kept for 14 days.

@@ -25,7 +25,8 @@
       "img/**",
       "data.js",
       "pos-server.js",
-      "pos.html"
+      "pos.html",
+      "net.js"
     ],
     "win": {
       "target": "nsis",
